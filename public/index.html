@@ -6,7 +6,8 @@
   <meta name="theme-color" content="#0b2a4a">
   <meta name="description" content="Mostre no mapa problemas que podem causar alagamento ou deslizamento no Recife. A prefeitura age antes da chuva.">
   <title>De Olho no Risco – Recife</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🌧️%3C/text%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="apple-touch-icon" href="/icon.png">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="/tailwind.css">
 </head>
@@ -16,7 +17,7 @@
   <header class="relative z-[1100] bg-gradient-to-r from-brand-900 to-brand-700 px-3 pb-2.5 pt-[max(.6rem,env(safe-area-inset-top))] text-white shadow-lg">
     <div class="flex items-center justify-between gap-2">
       <h1 class="flex items-center gap-2 text-lg font-extrabold leading-tight">
-        <span class="grid h-10 w-10 place-items-center rounded-xl bg-white/15"><i data-lucide="cloud-rain" class="h-6 w-6" aria-hidden="true"></i></span>
+        <span class="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-white shadow-sm"><img src="/icon.png" alt="" class="h-full w-full scale-125 object-contain" width="44" height="44"></span>
         <span>De Olho no Risco<small class="block text-xs font-medium text-brand-100">Prevenção a enchentes · Recife</small></span>
       </h1>
       <!-- No celular os botões ficam num menu; da largura sm em diante aparecem lado a lado. -->
@@ -125,7 +126,7 @@
 
   <dialog id="help" class="w-full max-w-lg rounded-3xl max-sm:m-0 max-sm:mt-auto max-sm:max-w-none max-sm:rounded-b-none" aria-labelledby="help-title">
     <div class="p-5">
-      <h2 id="help-title" class="mb-3 flex items-center gap-2 text-2xl font-extrabold"><i data-lucide="cloud-rain" class="h-7 w-7 text-brand-600" aria-hidden="true"></i> Como usar</h2>
+      <h2 id="help-title" class="mb-3 flex items-center gap-2 text-2xl font-extrabold"><img src="/icon.png" alt="" class="h-10 w-10 shrink-0 scale-125 object-contain" width="40" height="40"> Como usar</h2>
       <ol class="grid gap-3">
         <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">1</span><span><strong>Veja o mapa.</strong> Cada alfinete é um problema que pode causar alagamento ou deslizamento quando chover forte.</span></li>
         <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">2</span><span><strong>Viu algo perigoso?</strong> Toque em <em>Denunciar um problema</em>, escolha o tipo, marque o lugar e envie uma foto.</span></li>
