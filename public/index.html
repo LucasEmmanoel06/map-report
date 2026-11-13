@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b2a4a">
   <meta name="description" content="Mostre no mapa problemas que podem causar alagamento ou deslizamento no Recife. A prefeitura age antes da chuva.">
-  <title>Olho no Risco – Recife</title>
+  <title>De Olho no Risco – Recife</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🌧️%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="/tailwind.css">
@@ -13,16 +13,19 @@
 <body class="flex h-dvh flex-col">
   <a class="absolute -left-[999px] top-0 z-[3000] bg-[#ffbf00] px-4 py-3 font-bold text-black focus:left-0" href="#mapa">Pular para o mapa</a>
 
-  <header class="bg-gradient-to-r from-brand-900 to-brand-700 px-3 pb-2.5 pt-[max(.6rem,env(safe-area-inset-top))] text-white shadow-lg">
+  <header class="relative z-[1100] bg-gradient-to-r from-brand-900 to-brand-700 px-3 pb-2.5 pt-[max(.6rem,env(safe-area-inset-top))] text-white shadow-lg">
     <div class="flex items-center justify-between gap-2">
       <h1 class="flex items-center gap-2 text-lg font-extrabold leading-tight">
         <span class="grid h-10 w-10 place-items-center rounded-xl bg-white/15"><i data-lucide="cloud-rain" class="h-6 w-6" aria-hidden="true"></i></span>
-        <span>Olho no Risco<small class="block text-xs font-medium text-brand-100">Prevenção a enchentes · Recife</small></span>
+        <span>De Olho no Risco<small class="block text-xs font-medium text-brand-100">Prevenção a enchentes · Recife</small></span>
       </h1>
-      <div class="flex gap-1.5">
-        <button type="button" id="btn-mine" class="icon-btn" aria-label="Minhas denúncias"><i data-lucide="user-round" class="h-5 w-5" aria-hidden="true"></i><span id="mine-count" class="hidden sm:inline">Minhas</span></button>
-        <button type="button" id="btn-font" class="icon-btn text-base" aria-label="Aumentar o tamanho das letras">A+</button>
-        <button type="button" id="btn-help" class="icon-btn" aria-label="Ajuda: como usar"><i data-lucide="circle-help" class="h-5 w-5" aria-hidden="true"></i></button>
+      <!-- No celular os botões ficam num menu; da largura sm em diante aparecem lado a lado. -->
+      <button type="button" id="btn-menu" class="icon-btn sm:hidden" aria-label="Abrir menu" aria-expanded="false" aria-controls="header-menu"><i data-lucide="menu" class="h-6 w-6" aria-hidden="true"></i><span class="text-base">Menu</span></button>
+      <div id="header-menu" class="header-menu">
+        <button type="button" id="btn-mine" class="icon-btn" aria-label="Minhas solicitações" title="Minhas solicitações"><i data-lucide="user-round" class="h-5 w-5" aria-hidden="true"></i><span id="mine-count" class="menu-label">Minhas solicitações</span></button>
+        <button type="button" id="btn-font" class="icon-btn" aria-label="Aumentar o tamanho das letras"><span id="font-ico" class="text-base" aria-hidden="true">A+</span><span class="menu-label">Tamanho das letras</span></button>
+        <button type="button" id="btn-contrast" class="icon-btn" aria-label="Alto contraste" aria-pressed="false" title="Alto contraste"><i data-lucide="contrast" class="h-5 w-5" aria-hidden="true"></i><span class="menu-label">Alto contraste</span></button>
+        <button type="button" id="btn-help" class="icon-btn" aria-label="Ajuda: como usar"><i data-lucide="circle-help" class="h-5 w-5" aria-hidden="true"></i><span class="menu-label">Como usar</span></button>
       </div>
     </div>
   </header>
@@ -118,7 +121,7 @@
         <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">2</span><span><strong>Viu algo perigoso?</strong> Toque em <em>Denunciar um problema</em>, escolha o tipo, marque o lugar e envie uma foto.</span></li>
         <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">3</span><span><strong>A inteligência artificial ajuda</strong> a decidir o que é mais urgente, e a Defesa Civil confere cada caso.</span></li>
         <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">4</span><span><strong>Símbolos:</strong> <span class="font-bold text-alta">▲ vermelho = urgente</span> · <span class="font-bold text-media">◆ laranja = atenção</span> · <span class="font-bold text-baixa">● verde = prevenção</span> · <span class="font-bold text-atendido">✔ azul = já atendido pela prefeitura</span> · <span class="font-bold text-violet-800">◯ roxo = área de risco oficial da Defesa Civil</span>.</span></li>
-        <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">5</span><span><strong>Acompanhe.</strong> Em <em>Minhas</em> você vê se a prefeitura já está cuidando do que você mandou. Prefere sem mapa? Toque em <em>Ver lista</em>.</span></li>
+        <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">5</span><span><strong>Acompanhe.</strong> Em <em>Minhas solicitações</em> você vê se a prefeitura já está cuidando do que você mandou. Prefere sem mapa? Toque em <em>Ver lista</em>.</span></li>
       </ol>
       <p class="notice flex gap-2"><i data-lucide="siren" class="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true"></i><span><strong>Perigo agora?</strong> Saia do local e ligue <a class="font-extrabold underline" href="tel:199">199</a> (Defesa Civil) ou <a class="font-extrabold underline" href="tel:193">193</a> (Bombeiros). Este site não é um serviço de emergência.</span></p>
       <button type="button" class="btn btn-primary mt-2 w-full" id="help-close">Entendi</button>

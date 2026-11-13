@@ -165,7 +165,7 @@ function listItems() {
 
 function renderList() {
   const items = listItems();
-  $('#lista-title').textContent = mineOnly ? 'Minhas denúncias' : 'Problemas denunciados';
+  $('#lista-title').textContent = mineOnly ? 'Minhas solicitações' : 'Problemas denunciados';
   $('#lista-hint').textContent = mineOnly ? 'Denúncias enviadas deste aparelho. Veja se a prefeitura já está cuidando.' : `${items.length} ${items.length === 1 ? 'ponto' : 'pontos'}. Os mais urgentes aparecem primeiro.`;
   const empty = el('li', { class: 'rounded-2xl border-2 border-dashed border-slate-300 bg-white p-5 text-center' },
     mineOnly ? 'Você ainda não enviou denúncias deste aparelho. Toque em "Denunciar um problema" para começar.' : 'Nenhum ponto com este filtro.');
@@ -194,8 +194,10 @@ function setView(v, { onlyMine = false } = {}) {
 
 function updateMineButton() {
   const n = Object.keys(mine).length;
-  $('#mine-count').textContent = n ? `Minhas (${n})` : 'Minhas';
-  $('#btn-mine').setAttribute('aria-label', n ? `Minhas denúncias: ${n}` : 'Minhas denúncias');
+  const mineLabel = n ? `Minhas solicitações (${n})` : 'Minhas solicitações';
+  $('#mine-count').textContent = mineLabel;
+  $('#btn-mine').setAttribute('aria-label', mineLabel);
+  $('#btn-mine').title = mineLabel; // no desktop o botão é só ícone: o texto aparece ao passar o mouse
 }
 
 // Avisa quando a situação de uma denúncia minha mudou desde a última visita.
@@ -434,7 +436,7 @@ async function submit(desc) {
       el('div', { class: 'box' }, el('strong', {}, ico('life-buoy', 'h-5 w-5'), 'O que fazer agora'), r.orientacao),
       officialBox(r),
       whoBox(r),
-      el('p', { class: 'hint' }, 'Acompanhe em "Minhas": avisaremos aqui quando a prefeitura mudar a situação.'),
+      el('p', { class: 'hint' }, 'Acompanhe em "Minhas solicitações": avisaremos aqui quando a prefeitura mudar a situação.'),
       el('button', { type: 'button', class: 'btn btn-secondary w-full', onclick: () => speak(`Denúncia enviada. Prioridade ${LEVEL[r.prioridade].rotulo}. ${r.motivo} ${r.orientacao}`) }, ico('volume-2', 'h-5 w-5'), 'Ouvir'),
     );
     wiz.lat = r.lat; wiz.lng = r.lng;
@@ -492,14 +494,46 @@ document.querySelectorAll('.chip').forEach((b) => b.addEventListener('click', ()
   render();
 }));
 
-const big = safe(() => localStorage.getItem('big')) === '1';
-document.documentElement.classList.toggle('big', big);
-$('#btn-font').textContent = big ? 'A−' : 'A+';
-$('#btn-font').addEventListener('click', (e) => {
-  const on = document.documentElement.classList.toggle('big');
+const setFont = (on) => {
+  document.documentElement.classList.toggle('big', on);
+  $('#font-ico').textContent = on ? 'A−' : 'A+';
+  $('#btn-font').setAttribute('aria-label', on ? 'Diminuir o tamanho das letras' : 'Aumentar o tamanho das letras');
+};
+setFont(safe(() => localStorage.getItem('big')) === '1');
+$('#btn-font').addEventListener('click', () => {
+  const on = !document.documentElement.classList.contains('big');
+  setFont(on);
   safe(() => localStorage.setItem('big', on ? '1' : '0'));
-  e.currentTarget.textContent = on ? 'A−' : 'A+';
-  e.currentTarget.setAttribute('aria-label', on ? 'Diminuir o tamanho das letras' : 'Aumentar o tamanho das letras');
+});
+
+// Menu do topo no celular: abre/fecha, fecha ao tocar fora, com Esc ou ao abrir Minhas/Ajuda.
+const menuBtn = $('#btn-menu');
+const menu = $('#header-menu');
+const setMenu = (open, returnFocus = false) => {
+  menu.classList.toggle('open', open);
+  menuBtn.setAttribute('aria-expanded', String(open));
+  menuBtn.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
+  if (open) menu.querySelector('button').focus();
+  else if (returnFocus) menuBtn.focus();
+};
+menuBtn.addEventListener('click', () => setMenu(!menu.classList.contains('open')));
+document.addEventListener('click', (e) => {
+  if (menu.classList.contains('open') && !menu.contains(e.target) && !menuBtn.contains(e.target)) setMenu(false);
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && menu.classList.contains('open')) setMenu(false, true); });
+['#btn-mine', '#btn-help'].forEach((s) => $(s).addEventListener('click', () => setMenu(false)));
+
+// Alto contraste: segue a escolha salva; sem escolha, segue o pedido do sistema (prefers-contrast).
+const savedHc = safe(() => localStorage.getItem('hc'));
+const setContrast = (on) => {
+  document.documentElement.classList.toggle('hc', on);
+  $('#btn-contrast').setAttribute('aria-pressed', String(on));
+};
+setContrast(savedHc != null ? savedHc === '1' : !!safe(() => matchMedia('(prefers-contrast: more)').matches));
+$('#btn-contrast').addEventListener('click', () => {
+  const on = !document.documentElement.classList.contains('hc');
+  setContrast(on);
+  safe(() => localStorage.setItem('hc', on ? '1' : '0'));
 });
 
 /* ---------- Início ---------- */
