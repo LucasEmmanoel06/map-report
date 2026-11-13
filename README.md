@@ -4,8 +4,6 @@
 
 **Ideia em uma frase:** qualquer morador do Recife denuncia no mapa, com foto, um problema que agrava alagamentos e deslizamentos (encosta rachada, lixo no canal, bueiro entupido…); uma IA cruza a foto e o relato com os **dados oficiais da Defesa Civil**, sugere a prioridade, a Defesa Civil confere e encaminha ao órgão certo **antes** da chuva.
 
-🔗 **Deploy público:** _preencher o link (Render)_ · **Painel da Defesa Civil:** `/painel.html` · **Roteiro do pitch:** [docs/PITCH.md](docs/PITCH.md)
-
 ## Problema
 Rios, canais e encostas da RMR ficam entupidos ou instáveis, e a prefeitura só descobre depois da tragédia (maio/2022: +120 mortes em PE). A informação sobre quais pontos são mais urgentes não chega a quem pode agir — e quem denuncia nunca sabe se alguém viu.
 
