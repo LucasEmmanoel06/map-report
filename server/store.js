@@ -36,6 +36,13 @@ export class JsonStore {
     this._save();
     return next;
   }
+  // Exclusão definitiva (denúncia + foto). Devolve true se existia.
+  async remove(id) {
+    const existed = this.reports.delete(id);
+    this.photos.delete(id);
+    if (existed) this._save();
+    return existed;
+  }
   async count() { return this.reports.size; }
 }
 
@@ -71,6 +78,10 @@ export class PgStore {
     const next = { ...cur, ...patch };
     await this.pool.query('UPDATE reports SET data = $2 WHERE id = $1', [id, next]);
     return next;
+  }
+  async remove(id) {
+    const { rowCount } = await this.pool.query('DELETE FROM reports WHERE id = $1', [id]);
+    return rowCount > 0;
   }
   async count() {
     const { rows } = await this.pool.query('SELECT count(*)::int AS n FROM reports');

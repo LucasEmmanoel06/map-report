@@ -127,6 +127,14 @@
         catch (e) { msg.textContent = e.message; encBtn.textContent = 'Gerar encaminhamento'; }
         encBtn.disabled = false;
       } }, r.encaminhamento ? 'Refazer encaminhamento' : 'Gerar encaminhamento');
+      const delBtn = mk('button', { class: 'btn btn-danger !min-h-[48px]', type: 'button', onclick: async () => {
+        const nome = `${c.nome} – ${[r.rua, r.bairro].filter(Boolean).join(', ') || 'Recife'}`;
+        if (!confirm(`Excluir definitivamente a denúncia "${nome}"?\n\nA foto, a descrição e o histórico serão apagados e ela sai do mapa. Não dá para desfazer.`)) return;
+        delBtn.disabled = true; delBtn.textContent = 'Excluindo…';
+        try { await api(`/api/admin/reports/${r.id}`, { method: 'DELETE' }); await load(); $('#count').textContent += ' · denúncia excluída'; }
+        catch (e) { msg.textContent = e.message; delBtn.disabled = false; delBtn.textContent = 'Excluir'; }
+      } }, mk('i', { 'data-lucide': 'trash-2', class: 'h-5 w-5', 'aria-hidden': 'true' }), 'Excluir');
+      delBtn.setAttribute('aria-label', `Excluir a denúncia de ${c.nome.toLowerCase()}`);
       const ia = [
         `Sugestão ${r.fonte_prioridade === 'ia' ? 'da IA' : 'das regras'}: ${LV[r.prioridade_ia]}.`,
         r.motivo,
@@ -143,7 +151,7 @@
         officialText(r),
         mk('p', { class: 'text-sm' }, mk('strong', {}, 'Órgão responsável: '), c.orgao),
         mk('div', { class: 'grid grid-cols-2 gap-2' }, mk('div', {}, mk('label', { for: pSel.id, class: 'mb-1 block font-bold' }, 'Prioridade'), pSel), mk('div', {}, mk('label', { for: sSel.id, class: 'mb-1 block font-bold' }, 'Situação'), sSel)),
-        mk('div', { class: 'mt-1 flex flex-wrap items-center gap-2' }, save, encBtn, msg),
+        mk('div', { class: 'mt-1 flex flex-wrap items-center gap-2' }, save, encBtn, delBtn, msg),
         encHost);
     }
 
