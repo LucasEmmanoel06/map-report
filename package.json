@@ -1,0 +1,26 @@
+{
+  "name": "olho-no-risco",
+  "version": "1.0.0",
+  "description": "Mapa colaborativo de prevenção a enchentes e deslizamentos na RMR, com triagem de prioridade por IA.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test \"test/*.test.js\"",
+    "build": "tailwindcss -i src/input.css -o public/tailwind.css --minify",
+    "postinstall": "npm run build"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "leaflet": "^1.9.4",
+    "lucide": "^1.72.0",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.19"
+  }
+}

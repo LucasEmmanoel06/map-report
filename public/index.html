@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b2a4a">
+  <meta name="description" content="Mostre no mapa problemas que podem causar alagamento ou deslizamento no Recife. A prefeitura age antes da chuva.">
+  <title>Olho no Risco – Recife</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🌧️%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/tailwind.css">
+</head>
+<body class="flex h-dvh flex-col">
+  <a class="absolute -left-[999px] top-0 z-[3000] bg-[#ffbf00] px-4 py-3 font-bold text-black focus:left-0" href="#mapa">Pular para o mapa</a>
+
+  <header class="bg-gradient-to-r from-brand-900 to-brand-700 px-3 pb-2.5 pt-[max(.6rem,env(safe-area-inset-top))] text-white shadow-lg">
+    <div class="flex items-center justify-between gap-2">
+      <h1 class="flex items-center gap-2 text-lg font-extrabold leading-tight">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-white/15"><i data-lucide="cloud-rain" class="h-6 w-6" aria-hidden="true"></i></span>
+        <span>Olho no Risco<small class="block text-xs font-medium text-brand-100">Prevenção a enchentes · Recife</small></span>
+      </h1>
+      <div class="flex gap-1.5">
+        <button type="button" id="btn-font" class="icon-btn text-base" aria-label="Aumentar o tamanho das letras">A+</button>
+        <button type="button" id="btn-help" class="icon-btn" aria-label="Ajuda: como usar"><i data-lucide="circle-help" class="h-5 w-5" aria-hidden="true"></i></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="z-10 -mt-px border-b border-slate-200 bg-white px-3 py-2 shadow-sm">
+    <div class="flex gap-1 rounded-full bg-slate-100 p-1" role="group" aria-label="Mostrar no mapa">
+      <button type="button" class="chip" data-filter="todas" aria-pressed="true">Todas</button>
+      <button type="button" class="chip" data-filter="alta" aria-pressed="false"><span class="text-alta" aria-hidden="true">▲</span> Alta</button>
+      <button type="button" class="chip" data-filter="media" aria-pressed="false"><span class="text-media" aria-hidden="true">◆</span> Média</button>
+      <button type="button" class="chip" data-filter="baixa" aria-pressed="false"><span class="text-baixa" aria-hidden="true">●</span> Baixa</button>
+      <button type="button" class="chip" data-filter="atendido" aria-pressed="false"><span class="text-atendido" aria-hidden="true">✔</span> Atendido</button>
+    </div>
+    <p id="stats" class="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-600" aria-live="polite"><i data-lucide="activity" class="h-4 w-4 shrink-0 text-brand-600" aria-hidden="true"></i><span id="stats-text">Carregando o mapa…</span></p>
+  </div>
+
+  <main class="relative min-h-0 flex-1">
+    <div id="mapa" class="absolute inset-0" aria-label="Mapa com os problemas denunciados"></div>
+  </main>
+
+  <button type="button" id="btn-new" class="btn btn-primary fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-[1000] -translate-x-1/2 whitespace-nowrap rounded-full border-4 border-white px-7 text-lg">
+    <i data-lucide="plus-circle" class="h-6 w-6" aria-hidden="true"></i> Denunciar um problema
+  </button>
+
+  <aside id="sheet" class="fixed inset-x-0 bottom-0 z-[1500] mx-auto max-h-[68dvh] max-w-xl overflow-auto rounded-t-3xl border-t-4 border-brand-600 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_40px_rgba(11,42,74,.35)]" role="dialog" aria-labelledby="sheet-title" hidden>
+    <div class="mx-auto mb-2 h-1.5 w-12 rounded-full bg-slate-300" aria-hidden="true"></div>
+    <button type="button" id="sheet-close" class="btn btn-secondary float-right ml-2 !min-h-[44px] !rounded-xl !px-3 text-sm" aria-label="Fechar detalhes"><i data-lucide="x" class="h-5 w-5" aria-hidden="true"></i> Fechar</button>
+    <div id="sheet-body"></div>
+  </aside>
+
+  <dialog id="wizard" class="w-full max-w-xl rounded-3xl max-sm:m-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:rounded-none" aria-labelledby="wiz-title">
+    <form method="dialog" id="wiz-form" novalidate class="flex min-h-full flex-col p-4">
+      <div class="flex items-center justify-between gap-2">
+        <h2 id="wiz-title" class="text-xl font-extrabold">Denunciar um problema</h2>
+        <button type="button" id="wiz-close" class="grid h-11 w-11 place-items-center rounded-xl border-2 border-slate-300 hover:bg-slate-100" aria-label="Cancelar e fechar"><i data-lucide="x" class="h-6 w-6" aria-hidden="true"></i></button>
+      </div>
+      <div class="mt-3 flex gap-1.5" aria-hidden="true" id="wiz-bars"><span class="h-2 flex-1 rounded-full bg-slate-200"></span><span class="h-2 flex-1 rounded-full bg-slate-200"></span><span class="h-2 flex-1 rounded-full bg-slate-200"></span></div>
+      <p id="wiz-step" class="mb-3 mt-1.5 text-sm font-bold text-brand-700" aria-live="polite"></p>
+
+      <div class="flex-1">
+        <section data-step="1">
+          <h3 class="mb-3 text-xl font-extrabold">O que você viu?</h3>
+          <div id="cat-grid" class="grid grid-cols-2 gap-2.5 sm:grid-cols-3" role="radiogroup" aria-label="Tipo de problema"></div>
+        </section>
+
+        <section data-step="2" hidden>
+          <h3 class="mb-3 text-xl font-extrabold">Onde fica?</h3>
+          <button type="button" id="btn-locate" class="btn btn-secondary w-full"><i data-lucide="locate-fixed" class="h-5 w-5" aria-hidden="true"></i> Usar minha localização</button>
+          <p class="hint">Ou toque no mapa / arraste o alfinete até o lugar certo.</p>
+          <div id="mini-mapa" class="h-72 overflow-hidden rounded-2xl border-2 border-brand-900" aria-label="Mapa para marcar o local do problema"></div>
+          <p id="loc-status" class="hint" aria-live="polite"></p>
+        </section>
+
+        <section data-step="3" hidden>
+          <h3 class="mb-3 text-xl font-extrabold">Mostre e conte</h3>
+          <div id="dup" class="notice" hidden></div>
+          <label class="btn btn-secondary w-full cursor-pointer" for="foto"><i data-lucide="camera" class="h-6 w-6" aria-hidden="true"></i> Tirar ou escolher uma foto <span class="text-xs font-semibold">(obrigatório)</span></label>
+          <input type="file" id="foto" accept="image/*" capture="environment" class="sr-only">
+          <img id="foto-prev" alt="" class="mt-3 max-h-60 w-full rounded-2xl object-cover" hidden>
+          <label for="desc" class="mb-1.5 mt-4 block font-bold">Conte em poucas palavras o que está acontecendo</label>
+          <textarea id="desc" rows="4" maxlength="500" class="w-full rounded-2xl border-2 border-brand-900 p-3 text-base" placeholder="Ex.: A barreira está rachada e tem casas embaixo." aria-describedby="desc-count"></textarea>
+          <p id="desc-count" class="hint">0 de 500 letras (mínimo 10)</p>
+        </section>
+
+        <section data-step="4" hidden id="result" aria-live="polite"></section>
+      </div>
+
+      <p id="wiz-error" class="error mt-3" role="alert" hidden></p>
+      <div class="sticky bottom-0 -mx-4 mt-4 flex gap-2.5 border-t border-slate-200 bg-white px-4 py-3">
+        <button type="button" id="wiz-back" class="btn btn-secondary flex-1"><i data-lucide="arrow-left" class="h-5 w-5" aria-hidden="true"></i> Voltar</button>
+        <button type="button" id="wiz-next" class="btn btn-primary flex-[2]">Continuar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="help" class="w-full max-w-lg rounded-3xl max-sm:m-0 max-sm:mt-auto max-sm:max-w-none max-sm:rounded-b-none" aria-labelledby="help-title">
+    <div class="p-5">
+      <h2 id="help-title" class="mb-3 flex items-center gap-2 text-2xl font-extrabold"><i data-lucide="cloud-rain" class="h-7 w-7 text-brand-600" aria-hidden="true"></i> Como usar</h2>
+      <ol class="grid gap-3">
+        <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">1</span><span><strong>Veja o mapa.</strong> Cada alfinete é um problema que pode causar alagamento ou deslizamento quando chover forte.</span></li>
+        <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">2</span><span><strong>Viu algo perigoso?</strong> Toque em <em>Denunciar um problema</em>, escolha o tipo, marque o lugar e envie uma foto.</span></li>
+        <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">3</span><span><strong>A inteligência artificial ajuda</strong> a decidir o que é mais urgente, e a Defesa Civil confere cada caso.</span></li>
+        <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">4</span><span><strong>Símbolos:</strong> <span class="font-bold text-alta">▲ vermelho = urgente</span> · <span class="font-bold text-media">◆ laranja = atenção</span> · <span class="font-bold text-baixa">● verde = prevenção</span> · <span class="font-bold text-atendido">✔ azul = já atendido pela prefeitura</span>.</span></li>
+      </ol>
+      <p class="notice flex gap-2"><i data-lucide="siren" class="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true"></i><span><strong>Perigo agora?</strong> Saia do local e ligue <a class="font-extrabold underline" href="tel:199">199</a> (Defesa Civil) ou <a class="font-extrabold underline" href="tel:193">193</a> (Bombeiros). Este site não é um serviço de emergência.</span></p>
+      <button type="button" class="btn btn-primary mt-2 w-full" id="help-close">Entendi</button>
+    </div>
+  </dialog>
+
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="/vendor/lucide/lucide.min.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

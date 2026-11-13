@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel da Defesa Civil – Olho no Risco</title>
+  <link rel="stylesheet" href="/tailwind.css">
+</head>
+<body class="min-h-dvh">
+  <header class="flex items-center justify-between bg-gradient-to-r from-brand-900 to-brand-700 px-3 py-3 text-white shadow-lg">
+    <h1 class="flex items-center gap-2 text-lg font-extrabold"><i data-lucide="shield-check" class="h-6 w-6" aria-hidden="true"></i> Painel da Defesa Civil</h1>
+    <a class="icon-btn" href="/"><i data-lucide="arrow-left" class="h-5 w-5" aria-hidden="true"></i> Mapa</a>
+  </header>
+  <div class="mx-auto w-full max-w-4xl px-3 pb-16 pt-4">
+    <form id="login" class="mx-auto grid max-w-sm gap-3 rounded-3xl bg-white p-5 shadow-lg">
+      <label for="pin" class="font-bold">PIN de acesso</label>
+      <input id="pin" type="password" autocomplete="off" inputmode="numeric" class="min-h-[52px] rounded-xl border-2 border-brand-900 px-3 text-base">
+      <button class="btn btn-primary" type="submit">Entrar</button>
+      <p id="login-err" class="error" role="alert" hidden></p>
+    </form>
+    <div id="panel" hidden>
+      <p class="rounded-2xl border border-brand-100 bg-brand-50 p-3">A IA sugere a prioridade; <strong>você confere</strong>. Cada correção fica registrada como revisão humana.</p>
+      <div class="my-4 grid grid-cols-2 gap-3 sm:grid-cols-4" id="kpis"></div>
+      <div id="items" class="grid gap-3 md:grid-cols-2"></div>
+    </div>
+  </div>
+  <script src="/vendor/lucide/lucide.min.js"></script>
+  <script type="module">
+    const $ = (s) => document.querySelector(s);
+    let pin = sessionStorage.getItem('pin') || '';
+    const LV = { alta: '▲ ALTA', media: '◆ MÉDIA', baixa: '● BAIXA' };
+    const api = async (path, opts = {}) => {
+      const res = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', 'x-admin-pin': pin, ...(opts.headers || {}) } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.erro || 'Erro');
+      return data;
+    };
+    const mk = (t, a = {}, ...k) => { const n = document.createElement(t); for (const [x, v] of Object.entries(a)) { if (x === 'class') n.className = v; else if (x.startsWith('on')) n.addEventListener(x.slice(2), v); else n.setAttribute(x, v); } n.append(...k.flat().filter((z) => z != null)); return n; };
+
+    async function load() {
+      const [reports, s] = await Promise.all([fetch('/api/reports').then((r) => r.json()), fetch('/api/stats').then((r) => r.json())]);
+      $('#kpis').replaceChildren(
+        ...[[s.total, 'denúncias'], [s.alta, 'prioridade alta'], [s.alta_com_acao_pct === null ? '–' : s.alta_com_acao_pct + '%', 'urgentes com ação'], [s.horas_ate_primeira_acao ?? '–', 'horas até 1ª ação (mediana)']]
+          .map(([v, l]) => mk('div', { class: 'rounded-2xl bg-white p-3 shadow-sm' }, mk('b', { class: 'block text-3xl font-extrabold text-brand-700' }, String(v)), mk('span', { class: 'text-sm text-slate-600' }, l))));
+      const order = { alta: 0, media: 1, baixa: 2 };
+      reports.sort((a, b) => order[a.prioridade] - order[b.prioridade] || (a.revisada_por_humano - b.revisada_por_humano));
+      $('#items').replaceChildren(...reports.map(card));
+      window.lucide?.createIcons();
+    }
+
+    function card(r) {
+      const pSel = mk('select', { id: `p-${r.id}`, class: 'min-h-[48px] w-full rounded-xl border-2 border-brand-900 px-2' }, ...['alta', 'media', 'baixa'].map((v) => { const o = mk('option', { value: v }, LV[v]); if (v === r.prioridade) o.selected = true; return o; }));
+      const sSel = mk('select', { id: `s-${r.id}`, class: 'min-h-[48px] w-full rounded-xl border-2 border-brand-900 px-2' }, ...[['aberta', 'Aguardando'], ['em_analise', 'Em análise'], ['resolvida', 'Atendido']].map(([v, t]) => { const o = mk('option', { value: v }, t); if (v === r.status) o.selected = true; return o; }));
+      const msg = mk('span', { role: 'status' });
+      const save = mk('button', { class: 'btn btn-primary !min-h-[48px]', type: 'button', onclick: async () => {
+        try { await api(`/api/admin/reports/${r.id}`, { method: 'PATCH', body: JSON.stringify({ prioridade: pSel.value, status: sSel.value }) }); msg.textContent = '✔ Salvo'; await load(); } catch (e) { msg.textContent = e.message; }
+      } }, '✔ Confirmar / salvar');
+      return mk('article', { class: 'grid content-start gap-2 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm' },
+        mk('strong', { class: 'flex flex-wrap items-center gap-2' }, mk('span', { class: 'badge badge-' + r.prioridade }, LV[r.prioridade]), `${r.bairro || 'Recife'} · ${r.categoria.replace('_', ' ')}`, r.ficticio ? ' (exemplo fictício)' : ''),
+        r.foto_url ? mk('img', { src: r.foto_url, alt: 'Foto da denúncia', class: 'max-h-44 w-full rounded-2xl object-cover' }) : null,
+        mk('p', {}, r.descricao),
+        mk('p', { class: 'hint' }, `IA/regras sugeriram: ${LV[r.prioridade_ia]} · ${r.motivo} ${r.foto_coerente ? '' : '⚠️ Foto incoerente com a descrição.'} ${r.revisada_por_humano ? '✔ Revisada por humano.' : 'Aguardando revisão.'} · ${r.confirmacoes} confirmações`),
+        mk('div', { class: 'grid grid-cols-2 gap-2' }, mk('div', {}, mk('label', { for: pSel.id, class: 'mb-1 block font-bold' }, 'Prioridade'), pSel), mk('div', {}, mk('label', { for: sSel.id, class: 'mb-1 block font-bold' }, 'Situação'), sSel)),
+        mk('div', { class: 'mt-1 flex items-center gap-3' }, save, msg));
+    }
+
+    async function enter() {
+      try { await api('/api/admin/check', { method: 'POST' }); sessionStorage.setItem('pin', pin); $('#login').hidden = true; $('#panel').hidden = false; await load(); }
+      catch (e) { $('#login-err').textContent = e.message; $('#login-err').hidden = false; }
+    }
+    $('#login').addEventListener('submit', (e) => { e.preventDefault(); pin = $('#pin').value; enter(); });
+    if (pin) enter();
+  </script>
+</body>
+</html>

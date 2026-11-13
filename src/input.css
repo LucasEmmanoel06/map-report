@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { font-size: 112.5%; }
+  html.big { font-size: 131%; }
+  body { @apply bg-slate-50 text-brand-900 antialiased; }
+  :focus-visible { outline: 4px solid #ffbf00; outline-offset: 2px; box-shadow: 0 0 0 6px #0b2a4a; }
+  dialog { @apply p-0 text-brand-900; }
+  dialog::backdrop { background: rgba(11, 42, 74, .65); backdrop-filter: blur(3px); }
+}
+
+@layer components {
+  .btn { @apply inline-flex min-h-[56px] items-center justify-center gap-2 rounded-2xl px-5 text-base font-extrabold transition active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-primary { @apply bg-brand-600 text-white shadow-lg shadow-brand-600/30 hover:bg-brand-700; }
+  .btn-secondary { @apply border-2 border-brand-600 bg-white text-brand-600 hover:bg-brand-50; }
+  .icon-btn { @apply inline-flex h-11 min-w-[44px] items-center justify-center gap-1.5 rounded-xl border border-white/30 bg-white/10 px-3 text-sm font-bold text-white transition hover:bg-white/20; }
+  .chip { @apply inline-flex min-h-[44px] flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-full px-1.5 text-[13px] sm:px-3 sm:text-sm font-bold text-slate-700 transition; }
+  .chip[aria-pressed="true"] { @apply bg-brand-900 text-white shadow; }
+  .badge { @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-extrabold; }
+  .badge-alta { @apply border-alta/40 bg-alta-bg text-alta; }
+  .badge-media { @apply border-media/40 bg-media-bg text-media; }
+  .badge-baixa { @apply border-baixa/40 bg-baixa-bg text-baixa; }
+  .badge-atendido { @apply border-atendido/40 bg-atendido-bg text-atendido; }
+  .box { @apply my-3 rounded-2xl border border-brand-100 bg-brand-50 p-3.5; }
+  .box strong { @apply mb-0.5 flex items-center gap-1.5 text-brand-800; }
+  .hint { @apply my-1.5 text-sm text-slate-600; }
+  .error { @apply rounded-xl border-2 border-alta bg-alta-bg px-3 py-2 font-bold text-alta; }
+  .notice { @apply my-3 rounded-xl border-2 border-media/50 bg-media-bg px-3 py-2 text-media; }
+  .cat { @apply grid min-h-[104px] place-items-center gap-1.5 rounded-2xl border-2 border-slate-200 bg-white p-2 text-center text-sm font-bold text-brand-900 shadow-sm transition hover:border-brand-600; }
+  .cat[aria-checked="true"] { @apply border-brand-600 bg-brand-50 ring-4 ring-brand-600/25; }
+  .cat .ico { @apply grid h-12 w-12 place-items-center rounded-xl bg-brand-100 text-brand-700; }
+  .cat[aria-checked="true"] .ico { @apply bg-brand-600 text-white; }
+  .fake { @apply inline-flex items-center rounded-full border-2 border-dashed border-violet-700 bg-violet-100 px-2.5 py-0.5 text-xs font-bold text-violet-800; }
+}
+
+/* Alfinetes do mapa: ícone + letra + cor (nunca só cor) */
+.pin-wrap { background: none; border: 0; }
+.pin { position: relative; width: 46px; height: 46px; border-radius: 50%; border: 4px solid; background: #fff; display: grid; place-items: center; box-shadow: 0 4px 10px rgba(11, 42, 74, .45); }
+.pin svg { width: 22px; height: 22px; }
+.pin-alta { border-color: #b3261e; color: #b3261e; } .pin-media { border-color: #8a4b00; color: #8a4b00; } .pin-baixa { border-color: #17612f; color: #17612f; }
+.pin-atendido { border-color: #075985; color: #075985; background: #dff1fb; }
+.pin-tag { position: absolute; right: -8px; top: -8px; min-width: 22px; height: 22px; border-radius: 7px; color: #fff; font-size: 13px; font-weight: 800; display: grid; place-items: center; border: 2px solid #fff; }
+.pin-alta .pin-tag { background: #b3261e; } .pin-media .pin-tag { background: #8a4b00; } .pin-baixa .pin-tag { background: #17612f; } .pin-atendido .pin-tag { background: #075985; }
+.leaflet-container { font-family: inherit; }
+.spinner { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } * { transition: none !important; } }
+
+[hidden] { display: none !important; }

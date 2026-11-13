@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: olho-no-risco
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ADMIN_PIN
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
