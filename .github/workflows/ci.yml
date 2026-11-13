@@ -1,15 +1,35 @@
 name: CI
+
 on:
   push:
   pull_request:
+  # Botão "Run workflow" na aba Actions (escolha a branch e, se quiser, a versão do Node)
+  workflow_dispatch:
+    inputs:
+      node-version:
+        description: Versão do Node.js
+        required: false
+        default: '22'
+        type: choice
+        options: ['22', '24']
+
+permissions:
+  contents: read
+
+# Um novo push na mesma branch cancela a execução anterior que ainda está rodando
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ inputs.node-version || '22' }}
           cache: npm
       - run: npm ci
       - run: npm test
