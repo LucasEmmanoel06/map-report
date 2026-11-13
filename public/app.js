@@ -407,7 +407,8 @@ async function next() {
   if (wiz.step === 3) {
     const desc = $('#desc').value.trim();
     if (!wiz.foto) return showError('Envie pelo menos uma foto do problema.');
-    if (desc.length < 10) return showError('Conte em poucas palavras o que você viu (mínimo 10 letras).');
+    if (rec.recorder?.state === 'recording') await stopRec(); // tocou em Enviar ainda gravando
+    if (desc.length < 10 && !rec.audio) return showError('Conte em poucas palavras o que você viu (mínimo 10 letras) ou grave um áudio.');
     return submit(desc);
   }
   $('#wizard').close();
@@ -419,9 +420,11 @@ async function submit(desc) {
   const result = $('#result');
   document.querySelectorAll('#wiz-form section[data-step]').forEach((s) => { s.hidden = s !== result; });
   $('#wiz-next').hidden = true; $('#wiz-back').hidden = true;
-  result.replaceChildren(el('div', { class: 'grid place-items-center gap-3 py-12 text-center font-bold' }, el('div', { class: 'spinner h-12 w-12 rounded-full border-4 border-slate-200 border-t-brand-600' }), 'Analisando a foto com inteligência artificial…'));
+  result.replaceChildren(el('div', { class: 'grid place-items-center gap-3 py-12 text-center font-bold' }, el('div', { class: 'spinner h-12 w-12 rounded-full border-4 border-slate-200 border-t-brand-600' }), rec.audio ? 'Transcrevendo seu áudio e analisando a foto com inteligência artificial…' : 'Analisando a foto com inteligência artificial…'));
+  const sentAudio = Boolean(rec.audio);
   try {
-    const r = await api('/api/reports', { method: 'POST', body: JSON.stringify({ categoria: wiz.categoria, descricao: desc, lat: wiz.lat, lng: wiz.lng, foto: wiz.foto }) });
+    const r = await api('/api/reports', { method: 'POST', body: JSON.stringify({ categoria: wiz.categoria, descricao: desc, lat: wiz.lat, lng: wiz.lng, foto: wiz.foto, audio: rec.audio || undefined }) });
+    resetRec();
     reports = [r, ...reports];
     mine[r.id] = r.status;
     saveMine();
@@ -432,6 +435,8 @@ async function submit(desc) {
       el('div', { class: 'grid place-items-center py-2 text-center' }, el('span', { class: 'mb-2 grid h-16 w-16 place-items-center rounded-full bg-baixa-bg text-baixa' }, ico('check-circle-2', 'h-9 w-9')), el('h3', { class: 'text-2xl font-extrabold' }, 'Denúncia enviada. Obrigado!'), el('p', { class: 'hint' }, 'A prefeitura já pode ver este ponto no mapa.')),
       el('p', { class: 'text-center' }, badge(r.prioridade)),
       r.foto_coerente ? '' : el('p', { class: 'notice' }, 'A foto parece não mostrar o problema descrito. A Defesa Civil vai conferir.'),
+      r.descricao_por_audio ? el('div', { class: 'box' }, el('strong', {}, ico('audio-lines', 'h-5 w-5'), 'O que entendemos do seu áudio'), r.descricao) : '',
+      sentAudio && !r.descricao_por_audio ? el('p', { class: 'notice' }, 'Não consegui transcrever o áudio, então usamos só o texto que você escreveu.') : '',
       el('div', { class: 'box' }, el('strong', {}, ico('brain-circuit', 'h-5 w-5'), 'Por que essa prioridade?'), r.motivo),
       el('div', { class: 'box' }, el('strong', {}, ico('life-buoy', 'h-5 w-5'), 'O que fazer agora'), r.orientacao),
       officialBox(r),
@@ -451,8 +456,9 @@ async function submit(desc) {
 
 function openWizard() {
   Object.assign(wiz, { step: 1, categoria: null, lat: null, lng: null, foto: null });
+  resetRec();
   if (wiz.pin) { wiz.pin.remove(); wiz.pin = null; }
-  $('#desc').value = ''; $('#desc-count').textContent = '0 de 500 letras (mínimo 10)';
+  $('#desc').value = ''; $('#desc-count').textContent = '0 de 500 letras (mínimo 10, ou grave um áudio)';
   $('#foto').value = ''; $('#foto-prev').hidden = true; $('#loc-status').textContent = '';
   document.querySelectorAll('.cat').forEach((b) => b.setAttribute('aria-checked', 'false'));
   $('#result').hidden = false;
@@ -476,7 +482,7 @@ $('#help-close').addEventListener('click', () => $('#help').close());
 $('#wiz-form').addEventListener('submit', (e) => e.preventDefault());
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#sheet').hidden && !$('#wizard').open) closeSheet(); });
 
-$('#desc').addEventListener('input', (e) => { $('#desc-count').textContent = `${e.target.value.length} de 500 letras (mínimo 10)`; });
+$('#desc').addEventListener('input', (e) => { $('#desc-count').textContent = `${e.target.value.length} de 500 letras (mínimo 10, ou grave um áudio)`; });
 $('#foto').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -493,6 +499,96 @@ document.querySelectorAll('.chip').forEach((b) => b.addEventListener('click', ()
   document.querySelectorAll('.chip').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   render();
 }));
+
+/* ---------- Áudio da descrição (vira texto no servidor, ao enviar) ---------- */
+const MAX_REC_S = 60;
+const REC_HINT = 'Fale o que está acontecendo (até 1 minuto). O áudio vira texto da descrição quando você enviar.';
+const rec = { recorder: null, stream: null, chunks: [], timer: null, started: 0, audio: null, url: null, done: null };
+const recStatus = (t) => { $('#rec-status').textContent = t; };
+// Gravar exige microfone, MediaRecorder e endereço seguro (https ou localhost).
+const canRecord = () => window.isSecureContext && !!navigator.mediaDevices?.getUserMedia && 'MediaRecorder' in window;
+// Chrome/Android: webm/opus · Safari/iPhone: mp4/aac · Firefox: ogg/opus
+const pickMime = () => ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm'].find((t) => MediaRecorder.isTypeSupported?.(t)) || '';
+const blobToDataUrl = (blob) => new Promise((ok, fail) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = fail; fr.readAsDataURL(blob); });
+
+function setRecUI(state) { // 'idle' | 'rec' | 'ready'
+  const btn = $('#btn-rec');
+  btn.hidden = state === 'ready';
+  btn.setAttribute('aria-pressed', String(state === 'rec'));
+  btn.classList.toggle('btn-rec-on', state === 'rec');
+  btn.replaceChildren(ico(state === 'rec' ? 'square' : 'mic', 'h-6 w-6'), state === 'rec' ? 'Parar gravação' : 'Gravar áudio');
+  $('#audio-ready').hidden = state !== 'ready';
+  icons();
+}
+
+function releaseMic() {
+  clearInterval(rec.timer);
+  rec.stream?.getTracks().forEach((t) => t.stop());
+  rec.stream = null;
+}
+
+async function startRec() {
+  if (!canRecord()) return recStatus('A gravação de áudio não funciona neste navegador ou endereço (precisa de https). Escreva a descrição.');
+  try {
+    rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  } catch (e) {
+    return recStatus(e.name === 'NotAllowedError'
+      ? 'Você não deu permissão para o microfone. Para liberar, toque no cadeado ao lado do endereço do site. Ou escreva a descrição.'
+      : 'Não consegui usar o microfone. Escreva a descrição.');
+  }
+  const mime = pickMime();
+  rec.recorder = new MediaRecorder(rec.stream, { ...(mime && { mimeType: mime }), audioBitsPerSecond: 32000 });
+  rec.chunks = [];
+  rec.done = new Promise((resolve) => {
+    rec.recorder.ondataavailable = (e) => { if (e.data.size) rec.chunks.push(e.data); };
+    rec.recorder.onstop = async () => {
+      releaseMic();
+      const secs = Math.round((Date.now() - rec.started) / 1000);
+      const type = (rec.recorder.mimeType || mime || 'audio/webm').replace(/^video\//, 'audio/');
+      const blob = new Blob(rec.chunks, { type });
+      if (secs < 1 || blob.size < 1000) {
+        setRecUI('idle');
+        recStatus('O áudio ficou curto demais. Toque em Gravar áudio e fale por alguns segundos.');
+      } else {
+        rec.audio = await blobToDataUrl(blob);
+        rec.url = URL.createObjectURL(blob);
+        $('#audio-prev').src = rec.url;
+        setRecUI('ready');
+        recStatus(`Áudio gravado (${secs}s). Ele vira texto da descrição quando você enviar.`);
+      }
+      resolve();
+    };
+  });
+  rec.recorder.start(1000);
+  rec.started = Date.now();
+  setRecUI('rec');
+  recStatus(`Gravando… 0s de ${MAX_REC_S}s. Toque em Parar gravação quando terminar.`);
+  rec.timer = setInterval(() => {
+    const s = Math.floor((Date.now() - rec.started) / 1000);
+    recStatus(`Gravando… ${s}s de ${MAX_REC_S}s. Toque em Parar gravação quando terminar.`);
+    if (s >= MAX_REC_S) stopRec();
+  }, 1000);
+}
+
+function stopRec() {
+  if (rec.recorder?.state === 'recording') rec.recorder.stop();
+  return rec.done || Promise.resolve();
+}
+
+// Descarta o áudio e solta o microfone (ao apagar, abrir de novo ou fechar o formulário).
+function resetRec() {
+  if (rec.recorder?.state === 'recording') { rec.recorder.onstop = null; rec.recorder.stop(); }
+  releaseMic();
+  if (rec.url) URL.revokeObjectURL(rec.url);
+  Object.assign(rec, { recorder: null, chunks: [], audio: null, url: null, done: null });
+  $('#audio-prev').removeAttribute('src');
+  setRecUI('idle');
+  recStatus(REC_HINT);
+}
+
+$('#btn-rec').addEventListener('click', () => (rec.recorder?.state === 'recording' ? stopRec() : startRec()));
+$('#btn-rec-del').addEventListener('click', () => { resetRec(); $('#btn-rec').focus(); });
+$('#wizard').addEventListener('close', () => { if (rec.recorder?.state === 'recording') resetRec(); else releaseMic(); });
 
 const setFont = (on) => {
   document.documentElement.classList.toggle('big', on);

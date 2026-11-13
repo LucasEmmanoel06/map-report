@@ -6,8 +6,8 @@ import { JsonStore } from '../server/store.js';
 const PHOTO = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD';
 const valid = { categoria: 'encosta', descricao: 'Rachadura grande na encosta, casas embaixo', lat: -8.05, lng: -34.88, foto: PHOTO };
 
-async function start(analyze = async () => null) {
-  const app = createApp({ store: new JsonStore(), analyze, geocode: async () => ({ bairro: 'Casa Amarela', rua: 'Rua Teste' }), adminPin: '1234' });
+async function start(analyze = async () => null, transcribe = async () => null) {
+  const app = createApp({ store: new JsonStore(), analyze, transcribe, geocode: async () => ({ bairro: 'Casa Amarela', rua: 'Rua Teste' }), adminPin: '1234' });
   const server = await new Promise((r) => { const s = app.listen(0, () => r(s)); });
   const base = `http://127.0.0.1:${server.address().port}`;
   const call = (path, opts = {}) => fetch(base + path, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } });
@@ -77,5 +77,52 @@ test('API: auditoria humana exige PIN e registra a revisão', async () => {
   assert.ok(body.primeira_acao_em);
   const stats = await (await call('/api/stats')).json();
   assert.equal(stats.em_analise, 1);
+  close();
+});
+
+const AUDIO = 'data:audio/webm;codecs=opus;base64,GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYEC';
+
+test('API: áudio sem texto vira a descrição (transcrição)', async () => {
+  let recebido;
+  const { call, close } = await start(undefined, async (a) => { recebido = a; return 'O canal está cheio de lixo perto das casas'; });
+  const res = await call('/api/reports', { method: 'POST', body: JSON.stringify({ ...valid, descricao: '', audio: AUDIO }) });
+  assert.equal(res.status, 201);
+  const r = await res.json();
+  assert.equal(r.descricao, 'O canal está cheio de lixo perto das casas');
+  assert.equal(r.descricao_por_audio, true);
+  assert.equal(recebido, AUDIO);
+  assert.equal(r.audio, undefined); // o áudio não é guardado
+  close();
+});
+
+test('API: texto escrito + áudio são juntados na descrição', async () => {
+  const { call, close } = await start(undefined, async () => 'e a água já entrou em duas casas');
+  const res = await call('/api/reports', { method: 'POST', body: JSON.stringify({ ...valid, descricao: 'Canal transbordando', audio: AUDIO }) });
+  assert.equal((await res.json()).descricao, 'Canal transbordando e a água já entrou em duas casas');
+  close();
+});
+
+test('API: áudio sem fala e sem texto é recusado com mensagem clara', async () => {
+  const { call, close } = await start(undefined, async () => '');
+  const res = await call('/api/reports', { method: 'POST', body: JSON.stringify({ ...valid, descricao: '', audio: AUDIO }) });
+  assert.equal(res.status, 422);
+  assert.match((await res.json()).erro, /entender o áudio/);
+  close();
+});
+
+test('API: transcrição fora do ar não perde a denúncia que tem texto', async () => {
+  const { call, close } = await start(undefined, async () => { throw new Error('timeout'); });
+  const res = await call('/api/reports', { method: 'POST', body: JSON.stringify({ ...valid, audio: AUDIO }) });
+  assert.equal(res.status, 201);
+  const r = await res.json();
+  assert.equal(r.descricao, valid.descricao);
+  assert.equal(r.descricao_por_audio, false);
+  close();
+});
+
+test('API: recusa áudio em formato inválido', async () => {
+  const { call, close } = await start();
+  const res = await call('/api/reports', { method: 'POST', body: JSON.stringify({ ...valid, audio: 'data:text/html;base64,PHNjcmlwdD4=' }) });
+  assert.equal(res.status, 400);
   close();
 });

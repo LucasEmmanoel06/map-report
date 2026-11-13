@@ -99,7 +99,17 @@
           <img id="foto-prev" alt="" class="mt-3 max-h-60 w-full rounded-2xl object-cover" hidden>
           <label for="desc" class="mb-1.5 mt-4 block font-bold">Conte em poucas palavras o que está acontecendo</label>
           <textarea id="desc" rows="4" maxlength="500" class="w-full rounded-2xl border-2 border-brand-900 p-3 text-base" placeholder="Ex.: A barreira está rachada e tem casas embaixo." aria-describedby="desc-count"></textarea>
-          <p id="desc-count" class="hint">0 de 500 letras (mínimo 10)</p>
+          <p id="desc-count" class="hint">0 de 500 letras (mínimo 10, ou grave um áudio)</p>
+          <div class="mt-3">
+            <p class="mb-1.5 font-bold">Prefere falar?</p>
+            <button type="button" id="btn-rec" class="btn btn-secondary w-full" aria-pressed="false"><i data-lucide="mic" class="h-6 w-6" aria-hidden="true"></i> Gravar áudio</button>
+            <div id="audio-ready" class="box grid gap-2" hidden>
+              <strong><i data-lucide="audio-lines" class="h-5 w-5" aria-hidden="true"></i> Seu áudio</strong>
+              <audio id="audio-prev" controls class="w-full"></audio>
+              <button type="button" id="btn-rec-del" class="btn btn-secondary w-full"><i data-lucide="trash-2" class="h-5 w-5" aria-hidden="true"></i> Apagar e gravar de novo</button>
+            </div>
+            <p id="rec-status" class="hint" aria-live="polite">Fale o que está acontecendo (até 1 minuto). O áudio vira texto da descrição quando você enviar.</p>
+          </div>
         </section>
 
         <section data-step="4" hidden id="result" aria-live="polite"></section>

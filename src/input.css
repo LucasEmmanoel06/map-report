@@ -39,6 +39,8 @@
   .risk-toggle[aria-pressed="false"] { @apply border-slate-400 text-slate-600 opacity-90; }
   .risk-dot { @apply inline-block h-3.5 w-3.5 rounded-full border-2 border-violet-700 bg-violet-400/50; }
   .kpi { @apply rounded-2xl bg-white p-3 shadow-sm; }
+  /* Botão de gravar áudio enquanto grava: vermelho, com texto "Parar gravação" (nunca só cor) */
+  .btn-rec-on { @apply border-alta bg-alta text-white hover:bg-alta; }
   /* Menu do topo: lista suspensa no celular, botões lado a lado a partir de sm */
   .header-menu { @apply absolute right-3 top-full z-10 -mt-1 hidden w-64 flex-col gap-1.5 rounded-2xl border border-white/20 bg-brand-900 p-2 shadow-2xl; }
   .header-menu.open { @apply flex; }
@@ -105,6 +107,7 @@ html.hc .text-media, html.hc .badge-media, html.hc .notice { color: #ffd54f !imp
 html.hc .text-baixa, html.hc .badge-baixa { color: #69f0ae !important; border-color: #69f0ae !important; }
 html.hc .text-atendido, html.hc .badge-atendido { color: #81d4fa !important; border-color: #81d4fa !important; }
 html.hc .text-violet-800, html.hc .fake, html.hc .official { color: #d7b8ff !important; border-color: #d7b8ff !important; }
+html.hc .btn-rec-on, html.hc .btn-rec-on * { background-color: #ff9e97 !important; color: #000 !important; border-color: #ff9e97 !important; }
 html.hc :focus-visible { outline: 4px solid #ffeb3b !important; outline-offset: 3px; }
 /* Mapa-base em cinza para os alfinetes coloridos se destacarem */
 html.hc .leaflet-tile-pane { filter: grayscale(1) contrast(1.2); }

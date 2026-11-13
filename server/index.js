@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CATEGORIES, CATEGORY_IDS } from './categories.js';
-import { analyzeWithGemini, draftReferral } from './ai.js';
+import { analyzeWithGemini, draftReferral, transcribeAudio, AUDIO_RE } from './ai.js';
 import { heuristicPriority, finalizePriority, LEVELS } from './priority.js';
 import { reverseGeocode } from './geocode.js';
 import { createStore } from './store.js';
@@ -15,6 +15,8 @@ const STATUSES = ['aberta', 'em_analise', 'resolvida'];
 // Região Metropolitana do Recife (caixa aproximada)
 const BBOX = { minLat: -8.6, maxLat: -7.6, minLng: -35.3, maxLng: -34.7 };
 const MAX_PHOTO_CHARS = 1_800_000;
+// ~1 minuto de voz comprimida (webm/opus ou mp4/aac) em base64
+const MAX_AUDIO_CHARS = 1_200_000;
 
 const publicReport = (r) => {
   const { confirmacoes, encaminhamento, ...rest } = r;
@@ -65,10 +67,10 @@ function rateLimit({ windowMs, max }) {
   };
 }
 
-export function createApp({ store, analyze = analyzeWithGemini, geocode = reverseGeocode, referral = draftReferral, adminPin = process.env.ADMIN_PIN || 'defesacivil' }) {
+export function createApp({ store, analyze = analyzeWithGemini, geocode = reverseGeocode, referral = draftReferral, transcribe = transcribeAudio, adminPin = process.env.ADMIN_PIN || 'defesacivil' }) {
   const app = express();
   app.set('trust proxy', 1);
-  app.use(express.json({ limit: '2.5mb' }));
+  app.use(express.json({ limit: '3.5mb' }));
 
   app.get('/api/health', (_req, res) => res.json({ ok: true, ia: Boolean(process.env.GEMINI_API_KEY) }));
   app.get('/api/categories', (_req, res) => res.json(CATEGORIES));
@@ -92,16 +94,37 @@ export function createApp({ store, analyze = analyzeWithGemini, geocode = revers
   });
 
   app.post('/api/reports', rateLimit({ windowMs: 60_000, max: 6 }), async (req, res) => {
-    const { categoria, descricao, lat, lng, foto } = req.body || {};
-    const desc = String(descricao || '').trim();
+    const { categoria, descricao, lat, lng, foto, audio } = req.body || {};
+    let desc = String(descricao || '').trim();
     if (!CATEGORY_IDS.includes(categoria)) return res.status(400).json({ erro: 'Escolha o tipo de problema.' });
     if (!foto || !/^data:image\/(jpeg|png|webp);base64,/.test(foto)) return res.status(400).json({ erro: 'Envie pelo menos uma foto do problema.' });
     if (foto.length > MAX_PHOTO_CHARS) return res.status(413).json({ erro: 'A foto é muito grande. Tente outra.' });
-    if (desc.length < 10) return res.status(400).json({ erro: 'Conte em poucas palavras o que você viu (mínimo 10 letras).' });
+    if (audio != null && (typeof audio !== 'string' || !AUDIO_RE.test(audio))) return res.status(400).json({ erro: 'Não consegui ler o áudio. Grave de novo ou escreva a descrição.' });
+    if (audio && audio.length > MAX_AUDIO_CHARS) return res.status(413).json({ erro: 'O áudio é muito longo. Grave até 1 minuto.' });
+    if (!audio && desc.length < 10) return res.status(400).json({ erro: 'Conte em poucas palavras o que você viu (mínimo 10 letras) ou grave um áudio.' });
     if (desc.length > 500) return res.status(400).json({ erro: 'A descrição está muito longa (máximo 500 letras).' });
     const la = Number(lat), ln = Number(lng);
     if (!Number.isFinite(la) || !Number.isFinite(ln) || la < BBOX.minLat || la > BBOX.maxLat || ln < BBOX.minLng || ln > BBOX.maxLng) {
       return res.status(400).json({ erro: 'Marque o local no mapa, dentro da Região Metropolitana do Recife.' });
+    }
+
+    // Áudio do morador vira texto da descrição (o áudio em si não é guardado).
+    let porAudio = false;
+    if (audio) {
+      let falado = null;
+      try {
+        falado = await transcribe(audio);
+      } catch (err) {
+        console.warn('Transcrição falhou:', err.message);
+      }
+      if (falado) {
+        desc = [desc, falado].filter(Boolean).join(' ').slice(0, 500);
+        porAudio = true;
+      } else if (desc.length < 10) {
+        const erro = falado === '' ? 'Não consegui entender o áudio. Grave de novo, mais perto do celular, ou escreva a descrição.'
+          : 'Não consegui transcrever o áudio agora. Escreva em poucas palavras o que você viu.';
+        return res.status(422).json({ erro });
+      }
     }
 
     // 1) endereço (OpenStreetMap) → 2) dados oficiais da Defesa Civil → 3) regras de segurança → 4) IA com todo o contexto
@@ -120,6 +143,7 @@ export function createApp({ store, analyze = analyzeWithGemini, geocode = revers
       id: crypto.randomUUID(),
       categoria,
       descricao: desc,
+      descricao_por_audio: porAudio,
       lat: la,
       lng: ln,
       bairro: place.bairro || contexto.area?.bairro || null,
