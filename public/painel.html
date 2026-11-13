@@ -11,7 +11,7 @@
     <h1 class="flex items-center gap-2 text-lg font-extrabold"><i data-lucide="shield-check" class="h-6 w-6" aria-hidden="true"></i> Painel da Defesa Civil</h1>
     <a class="icon-btn" href="/"><i data-lucide="arrow-left" class="h-5 w-5" aria-hidden="true"></i> Mapa</a>
   </header>
-  <div class="mx-auto w-full max-w-4xl px-3 pb-16 pt-4">
+  <main class="mx-auto w-full max-w-5xl px-3 pb-16 pt-4">
     <form id="login" class="mx-auto grid max-w-sm gap-3 rounded-3xl bg-white p-5 shadow-lg">
       <label for="pin" class="font-bold">PIN de acesso</label>
       <input id="pin" type="password" autocomplete="off" inputmode="numeric" class="min-h-[52px] rounded-xl border-2 border-brand-900 px-3 text-base">
@@ -19,56 +19,145 @@
       <p id="login-err" class="error" role="alert" hidden></p>
     </form>
     <div id="panel" hidden>
-      <p class="rounded-2xl border border-brand-100 bg-brand-50 p-3">A IA sugere a prioridade; <strong>você confere</strong>. Cada correção fica registrada como revisão humana.</p>
-      <div class="my-4 grid grid-cols-2 gap-3 sm:grid-cols-4" id="kpis"></div>
-      <div id="items" class="grid gap-3 md:grid-cols-2"></div>
+      <p class="rounded-2xl border border-brand-100 bg-brand-50 p-3">A IA sugere a prioridade usando a foto, o relato e os <strong>dados oficiais da Defesa Civil</strong>; <strong>você confere</strong>. Cada correção fica registrada como revisão humana.</p>
+      <h2 class="mt-4 text-lg font-extrabold">Indicadores</h2>
+      <div class="my-2 grid grid-cols-2 gap-3 sm:grid-cols-4" id="kpis"></div>
+      <div class="mt-4 flex flex-wrap items-end gap-3">
+        <div>
+          <label for="f-show" class="mb-1 block font-bold">Mostrar</label>
+          <select id="f-show" class="min-h-[48px] rounded-xl border-2 border-brand-900 px-2">
+            <option value="revisar">Aguardando revisão</option>
+            <option value="todas">Todas</option>
+            <option value="alta">Só prioridade alta</option>
+            <option value="area">Em área de risco oficial</option>
+            <option value="abertas">Ainda sem ação</option>
+            <option value="resolvida">Atendidas</option>
+          </select>
+        </div>
+        <p id="count" class="hint mb-3" aria-live="polite"></p>
+      </div>
+      <div id="items" class="mt-3 grid gap-3 md:grid-cols-2"></div>
     </div>
-  </div>
+  </main>
   <script src="/vendor/lucide/lucide.min.js"></script>
   <script type="module">
     const $ = (s) => document.querySelector(s);
     let pin = sessionStorage.getItem('pin') || '';
+    let categories = [];
+    let reports = [];
     const LV = { alta: '▲ ALTA', media: '◆ MÉDIA', baixa: '● BAIXA' };
+    const ST = { aberta: 'Aguardando', em_analise: 'Em análise', resolvida: 'Atendido' };
     const api = async (path, opts = {}) => {
       const res = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', 'x-admin-pin': pin, ...(opts.headers || {}) } });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.erro || 'Erro');
       return data;
     };
-    const mk = (t, a = {}, ...k) => { const n = document.createElement(t); for (const [x, v] of Object.entries(a)) { if (x === 'class') n.className = v; else if (x.startsWith('on')) n.addEventListener(x.slice(2), v); else n.setAttribute(x, v); } n.append(...k.flat().filter((z) => z != null)); return n; };
+    const mk = (t, a = {}, ...k) => { const n = document.createElement(t); for (const [x, v] of Object.entries(a)) { if (x === 'class') n.className = v; else if (x.startsWith('on')) n.addEventListener(x.slice(2), v); else if (v != null && v !== false) n.setAttribute(x, v); } n.append(...k.flat().filter((z) => z != null && z !== '')); return n; };
+    const cat = (id) => categories.find((c) => c.id === id) || { nome: id, orgao: 'Defesa Civil do Recife' };
+    const when = (iso) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    const pct = (v) => (v === null || v === undefined ? '–' : v + '%');
+
+    const FILTERS = {
+      revisar: (r) => !r.revisada_por_humano,
+      todas: () => true,
+      alta: (r) => r.prioridade === 'alta',
+      area: (r) => r.contexto_oficial?.area,
+      abertas: (r) => r.status === 'aberta',
+      resolvida: (r) => r.status === 'resolvida',
+    };
 
     async function load() {
-      const [reports, s] = await Promise.all([fetch('/api/reports').then((r) => r.json()), fetch('/api/stats').then((r) => r.json())]);
-      $('#kpis').replaceChildren(
-        ...[[s.total, 'denúncias'], [s.alta, 'prioridade alta'], [s.alta_com_acao_pct === null ? '–' : s.alta_com_acao_pct + '%', 'urgentes com ação'], [s.horas_ate_primeira_acao ?? '–', 'horas até 1ª ação (mediana)']]
-          .map(([v, l]) => mk('div', { class: 'rounded-2xl bg-white p-3 shadow-sm' }, mk('b', { class: 'block text-3xl font-extrabold text-brand-700' }, String(v)), mk('span', { class: 'text-sm text-slate-600' }, l))));
+      const [list, s] = await Promise.all([api('/api/admin/reports'), fetch('/api/stats').then((r) => r.json())]);
+      reports = list;
+      $('#kpis').replaceChildren(...[
+        [s.total, 'denúncias no mapa'],
+        [s.alta, 'de prioridade alta'],
+        [pct(s.alta_com_acao_pct), 'dos urgentes já têm ação'],
+        [s.horas_ate_primeira_acao ?? '–', 'horas até a 1ª ação (mediana)'],
+        [s.aguardando_revisao, 'aguardando revisão'],
+        [s.em_area_de_risco_oficial, 'em área de risco oficial'],
+      ].map(([v, l]) => mk('div', { class: 'kpi' }, mk('b', { class: 'block text-3xl font-extrabold text-brand-700' }, String(v)), mk('span', { class: 'text-sm text-slate-600' }, l))));
+      render();
+    }
+
+    function render() {
       const order = { alta: 0, media: 1, baixa: 2 };
-      reports.sort((a, b) => order[a.prioridade] - order[b.prioridade] || (a.revisada_por_humano - b.revisada_por_humano));
-      $('#items').replaceChildren(...reports.map(card));
+      const shown = reports.filter(FILTERS[$('#f-show').value])
+        .sort((a, b) => order[a.prioridade] - order[b.prioridade] || b.confirmacoes - a.confirmacoes || new Date(a.criado_em) - new Date(b.criado_em));
+      $('#count').textContent = `${shown.length} de ${reports.length} denúncias`;
+      $('#items').replaceChildren(...(shown.length ? shown.map(card) : [mk('p', { class: 'rounded-2xl border-2 border-dashed border-slate-300 bg-white p-5 text-center md:col-span-2' }, 'Nada por aqui. 🎉')]));
       window.lucide?.createIcons();
     }
 
+    function officialText(r) {
+      const c = r.contexto_oficial;
+      if (!c || (!c.area && !c.bairro)) return null;
+      const parts = [];
+      if (c.area) parts.push(`${c.area.distancia_m} m de ${c.area.tipo.toLowerCase()} (${c.area.localidade})`);
+      if (c.bairro) parts.push(`${c.bairro.nome}: ${c.bairro.atendimentos.toLocaleString('pt-BR')} atendimentos em ${c.bairro.ano}, ${c.bairro.risco_alto.toLocaleString('pt-BR')} imóveis R3/R4, ${c.bairro.alagamentos} alagamentos`);
+      return mk('p', { class: 'rounded-xl border border-violet-200 bg-violet-50 p-2 text-sm text-violet-900' }, mk('strong', {}, 'Dados oficiais: '), parts.join(' · '));
+    }
+
+    function referralBox(r, host) {
+      const ta = mk('textarea', { id: `enc-${r.id}`, rows: '9', class: 'w-full rounded-xl border-2 border-brand-900 p-2 text-sm' });
+      ta.value = r.encaminhamento.texto;
+      const copied = mk('span', { role: 'status', class: 'text-sm font-bold' });
+      host.replaceChildren(
+        mk('label', { for: ta.id, class: 'mb-1 block font-bold' }, `Encaminhamento (${r.encaminhamento.fonte === 'ia' ? 'redigido pela IA' : 'modelo automático'} – revise antes de enviar)`),
+        ta,
+        mk('div', { class: 'mt-1 flex items-center gap-3' },
+          mk('button', { type: 'button', class: 'btn btn-secondary !min-h-[44px]', onclick: async () => { try { await navigator.clipboard.writeText(ta.value); copied.textContent = '✔ Copiado'; } catch { ta.select(); copied.textContent = 'Selecionado: use Ctrl+C'; } } }, 'Copiar texto'),
+          copied));
+    }
+
     function card(r) {
+      const c = cat(r.categoria);
       const pSel = mk('select', { id: `p-${r.id}`, class: 'min-h-[48px] w-full rounded-xl border-2 border-brand-900 px-2' }, ...['alta', 'media', 'baixa'].map((v) => { const o = mk('option', { value: v }, LV[v]); if (v === r.prioridade) o.selected = true; return o; }));
-      const sSel = mk('select', { id: `s-${r.id}`, class: 'min-h-[48px] w-full rounded-xl border-2 border-brand-900 px-2' }, ...[['aberta', 'Aguardando'], ['em_analise', 'Em análise'], ['resolvida', 'Atendido']].map(([v, t]) => { const o = mk('option', { value: v }, t); if (v === r.status) o.selected = true; return o; }));
-      const msg = mk('span', { role: 'status' });
+      const sSel = mk('select', { id: `s-${r.id}`, class: 'min-h-[48px] w-full rounded-xl border-2 border-brand-900 px-2' }, ...Object.entries(ST).map(([v, t]) => { const o = mk('option', { value: v }, t); if (v === r.status) o.selected = true; return o; }));
+      const msg = mk('span', { role: 'status', class: 'text-sm font-bold' });
       const save = mk('button', { class: 'btn btn-primary !min-h-[48px]', type: 'button', onclick: async () => {
         try { await api(`/api/admin/reports/${r.id}`, { method: 'PATCH', body: JSON.stringify({ prioridade: pSel.value, status: sSel.value }) }); msg.textContent = '✔ Salvo'; await load(); } catch (e) { msg.textContent = e.message; }
       } }, '✔ Confirmar / salvar');
+      const encHost = mk('div', { class: 'mt-1' });
+      if (r.encaminhamento) referralBox(r, encHost);
+      const encBtn = mk('button', { class: 'btn btn-secondary !min-h-[48px]', type: 'button', onclick: async () => {
+        encBtn.disabled = true; encBtn.textContent = 'Redigindo…';
+        try { const updated = await api(`/api/admin/reports/${r.id}/encaminhamento`, { method: 'POST' }); Object.assign(r, updated); referralBox(r, encHost); encBtn.textContent = 'Refazer encaminhamento'; }
+        catch (e) { msg.textContent = e.message; encBtn.textContent = 'Gerar encaminhamento'; }
+        encBtn.disabled = false;
+      } }, r.encaminhamento ? 'Refazer encaminhamento' : 'Gerar encaminhamento');
+      const ia = [
+        `Sugestão ${r.fonte_prioridade === 'ia' ? 'da IA' : 'das regras'}: ${LV[r.prioridade_ia]}.`,
+        r.motivo,
+        r.foto_coerente ? '' : '⚠️ Foto parece incoerente com o relato.',
+        r.categoria_sugerida_ia ? `⚠️ A IA acha que o tipo é "${cat(r.categoria_sugerida_ia).nome}".` : '',
+      ].filter(Boolean).join(' ');
       return mk('article', { class: 'grid content-start gap-2 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm' },
-        mk('strong', { class: 'flex flex-wrap items-center gap-2' }, mk('span', { class: 'badge badge-' + r.prioridade }, LV[r.prioridade]), `${r.bairro || 'Recife'} · ${r.categoria.replace('_', ' ')}`, r.ficticio ? ' (exemplo fictício)' : ''),
-        r.foto_url ? mk('img', { src: r.foto_url, alt: 'Foto da denúncia', class: 'max-h-44 w-full rounded-2xl object-cover' }) : null,
-        mk('p', {}, r.descricao),
-        mk('p', { class: 'hint' }, `IA/regras sugeriram: ${LV[r.prioridade_ia]} · ${r.motivo} ${r.foto_coerente ? '' : '⚠️ Foto incoerente com a descrição.'} ${r.revisada_por_humano ? '✔ Revisada por humano.' : 'Aguardando revisão.'} · ${r.confirmacoes} confirmações`),
+        mk('h3', { class: 'flex flex-wrap items-center gap-2 font-extrabold' }, mk('span', { class: 'badge badge-' + r.prioridade }, LV[r.prioridade]), `${c.nome}`),
+        mk('p', { class: 'flex flex-wrap items-center gap-1.5 text-sm text-slate-600' }, `${[r.rua, r.bairro].filter(Boolean).join(', ') || 'Recife'} · ${when(r.criado_em)} · ${r.confirmacoes} confirmações`,
+          r.ficticio ? mk('span', { class: 'fake' }, 'Exemplo fictício') : null, r.contexto_oficial?.area ? mk('span', { class: 'official' }, 'Área de risco oficial') : null),
+        r.foto_url ? mk('img', { src: r.foto_url, alt: 'Foto da denúncia', class: 'max-h-44 w-full rounded-2xl object-cover', loading: 'lazy' }) : null,
+        mk('p', {}, `“${r.descricao}”`),
+        mk('p', { class: 'hint' }, ia, ' ', mk('strong', {}, r.revisada_por_humano ? '✔ Revisada por humano.' : 'Aguardando revisão.')),
+        officialText(r),
+        mk('p', { class: 'text-sm' }, mk('strong', {}, 'Órgão responsável: '), c.orgao),
         mk('div', { class: 'grid grid-cols-2 gap-2' }, mk('div', {}, mk('label', { for: pSel.id, class: 'mb-1 block font-bold' }, 'Prioridade'), pSel), mk('div', {}, mk('label', { for: sSel.id, class: 'mb-1 block font-bold' }, 'Situação'), sSel)),
-        mk('div', { class: 'mt-1 flex items-center gap-3' }, save, msg));
+        mk('div', { class: 'mt-1 flex flex-wrap items-center gap-2' }, save, encBtn, msg),
+        encHost);
     }
 
     async function enter() {
-      try { await api('/api/admin/check', { method: 'POST' }); sessionStorage.setItem('pin', pin); $('#login').hidden = true; $('#panel').hidden = false; await load(); }
-      catch (e) { $('#login-err').textContent = e.message; $('#login-err').hidden = false; }
+      try {
+        await api('/api/admin/check', { method: 'POST' });
+        sessionStorage.setItem('pin', pin);
+        categories = await fetch('/api/categories').then((r) => r.json());
+        $('#login').hidden = true; $('#panel').hidden = false;
+        await load();
+      } catch (e) { $('#login-err').textContent = e.message; $('#login-err').hidden = false; }
     }
     $('#login').addEventListener('submit', (e) => { e.preventDefault(); pin = $('#pin').value; enter(); });
+    $('#f-show').addEventListener('change', render);
     if (pin) enter();
   </script>
 </body>

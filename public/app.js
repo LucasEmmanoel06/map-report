@@ -37,7 +37,15 @@ let categories = [];
 let reports = [];
 let filter = 'todas';
 let selectedId = null;
+let view = 'mapa'; // 'mapa' | 'lista'
+let mineOnly = false;
+let riskAreas = [];
 const markers = new Map();
+
+// "Minhas denúncias": guardadas neste aparelho (id -> última situação vista), sem login.
+const mine = safe(() => JSON.parse(localStorage.getItem('meus') || '{}')) || {};
+const saveMine = () => safe(() => localStorage.setItem('meus', JSON.stringify(mine)));
+const fmt = (n) => Number(n).toLocaleString('pt-BR');
 
 /* ---------- API ---------- */
 async function api(path, opts = {}) {
@@ -58,10 +66,73 @@ const place = (r) => [r.rua, r.bairro].filter(Boolean).join(', ') || 'Região Me
 const nivel = (r) => (r.status === 'resolvida' ? 'atendido' : r.prioridade);
 const badge = (p) => el('span', { class: `badge badge-${p}` }, p === 'atendido' ? '✔ Atendido pela prefeitura' : `${LEVEL[p].simbolo} Prioridade ${LEVEL[p].rotulo}`);
 const ICON_OF = (id) => CAT_ICON[id] || 'triangle-alert';
+const ORDER = { alta: 0, media: 1, baixa: 2, atendido: 3 };
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { t.hidden = true; }, 7000);
+}
+
+// Dados oficiais da Defesa Civil do Recife que acompanham cada ponto.
+function officialBox(r) {
+  const ctx = r.contexto_oficial;
+  if (!ctx || (!ctx.area && !ctx.bairro)) return '';
+  const items = [];
+  if (ctx.area) items.push(el('li', {}, `Fica a ${ctx.area.distancia_m} m de uma ${ctx.area.tipo.toLowerCase()} mapeada pela Defesa Civil (${ctx.area.localidade}).`));
+  if (ctx.bairro) items.push(el('li', {}, `Em ${ctx.bairro.ano}, a Defesa Civil fez ${fmt(ctx.bairro.atendimentos)} atendimentos em ${r.bairro || ctx.bairro.nome}` + (ctx.bairro.risco_alto ? `, com ${fmt(ctx.bairro.risco_alto)} imóveis em risco alto.` : '.')));
+  return el('div', { class: 'box' }, el('strong', {}, ico('landmark', 'h-5 w-5'), 'Dados oficiais do Recife'), el('ul', { class: 'ml-5 list-disc' }, items),
+    el('span', { class: 'mt-1 block text-xs text-slate-600' }, 'Fonte: Portal de Dados Abertos do Recife – Defesa Civil.'));
+}
+const whoBox = (r) => el('div', { class: 'box' }, el('strong', {}, ico('building-2', 'h-5 w-5'), 'Quem resolve'), cat(r.categoria).orgao || 'Defesa Civil do Recife',
+  r.encaminhado_em ? el('em', { class: 'mt-1 flex items-center gap-1 font-bold not-italic text-baixa' }, ico('send', 'h-4 w-4'), 'Já encaminhado pela Defesa Civil') : '');
 
 /* ---------- Mapa principal ---------- */
 const map = L.map('mapa', { zoomControl: true }).setView(RECIFE, 12);
 L.tileLayer(TILES, { maxZoom: 19, attribution: ATTR }).addTo(map);
+
+/* ---------- Camada oficial: áreas de risco mapeadas pela Defesa Civil (desligada por padrão) ---------- */
+const riskLayer = L.layerGroup();
+const miniRiskLayer = L.layerGroup();
+const RiskControl = L.Control.extend({
+  onAdd() {
+    const b = L.DomUtil.create('button', 'risk-toggle');
+    b.type = 'button';
+    b.setAttribute('aria-pressed', 'false');
+    b.innerHTML = '<span class="risk-dot" aria-hidden="true"></span> Áreas de risco oficiais';
+    b.title = 'Mostrar ou esconder as áreas de risco mapeadas pela Defesa Civil do Recife';
+    L.DomEvent.disableClickPropagation(b);
+    L.DomEvent.on(b, 'click', () => {
+      const on = !map.hasLayer(riskLayer);
+      if (on) riskLayer.addTo(map); else riskLayer.remove();
+      b.setAttribute('aria-pressed', String(on));
+    });
+    return b;
+  },
+});
+new RiskControl({ position: 'topright' }).addTo(map);
+
+async function loadRiskAreas() {
+  const data = await api('/api/risk-areas');
+  riskAreas = data.pontos.map(([lat, lng, nivel, localidade, tipo]) => ({ lat, lng, nivel, localidade, tipo }));
+  for (const p of riskAreas) {
+    L.circleMarker([p.lat, p.lng], { radius: p.nivel >= 4 ? 7 : 5, color: '#6d28d9', weight: 1.5, fillColor: '#8b5cf6', fillOpacity: 0.35 })
+      .bindTooltip(`${p.tipo} · ${p.localidade} (Defesa Civil)`)
+      .addTo(riskLayer);
+    L.circleMarker([p.lat, p.lng], { radius: 4, color: '#6d28d9', weight: 1, fillOpacity: 0.3, interactive: false }).addTo(miniRiskLayer);
+  }
+}
+
+function nearestRisk(lat, lng, maxM = 150) {
+  let best = null;
+  for (const p of riskAreas) {
+    const d = dist({ lat, lng }, p);
+    if (d <= maxM && (!best || d < best.d)) best = { ...p, d: Math.round(d) };
+  }
+  return best;
+}
 
 function pinIcon(r) {
   const c = cat(r.categoria);
@@ -85,11 +156,68 @@ function renderMap() {
   icons();
 }
 
-const render = renderMap;
+/* ---------- Lista (alternativa acessível ao mapa) ---------- */
+function listItems() {
+  return visible()
+    .filter((r) => !mineOnly || mine[r.id] !== undefined)
+    .sort((a, b) => ORDER[nivel(a)] - ORDER[nivel(b)] || b.confirmacoes - a.confirmacoes || new Date(b.criado_em) - new Date(a.criado_em));
+}
+
+function renderList() {
+  const items = listItems();
+  $('#lista-title').textContent = mineOnly ? 'Minhas denúncias' : 'Problemas denunciados';
+  $('#lista-hint').textContent = mineOnly ? 'Denúncias enviadas deste aparelho. Veja se a prefeitura já está cuidando.' : `${items.length} ${items.length === 1 ? 'ponto' : 'pontos'}. Os mais urgentes aparecem primeiro.`;
+  const empty = el('li', { class: 'rounded-2xl border-2 border-dashed border-slate-300 bg-white p-5 text-center' },
+    mineOnly ? 'Você ainda não enviou denúncias deste aparelho. Toque em "Denunciar um problema" para começar.' : 'Nenhum ponto com este filtro.');
+  $('#lista-itens').replaceChildren(...(items.length ? items.map((r) => {
+    const c = cat(r.categoria);
+    return el('li', {}, el('button', { type: 'button', class: 'flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-sm hover:border-brand-600', onclick: () => openSheet(r.id) },
+      el('span', { class: `pin pin-${nivel(r)} !h-11 !w-11 shrink-0` }, ico(ICON_OF(r.categoria))),
+      el('span', { class: 'grid min-w-0 flex-1 gap-1' },
+        el('span', { class: 'font-extrabold leading-tight' }, c.nome),
+        el('span', { class: 'flex flex-wrap items-center gap-1.5' }, badge(nivel(r)), r.ficticio ? el('span', { class: 'fake' }, 'Exemplo fictício') : '', r.contexto_oficial?.area ? el('span', { class: 'official' }, 'Área de risco oficial') : ''),
+        el('span', { class: 'text-sm text-slate-600' }, `${place(r)} · ${ago(r.criado_em)} · ${STATUS[r.status]} · ${r.confirmacoes} confirmações`))));
+  }) : [empty]));
+  icons();
+}
+
+function setView(v, { onlyMine = false } = {}) {
+  view = v;
+  mineOnly = v === 'lista' && onlyMine;
+  $('#lista').hidden = v !== 'lista';
+  const b = $('#btn-view');
+  b.setAttribute('aria-pressed', String(v === 'lista'));
+  b.replaceChildren(ico(v === 'lista' ? 'map' : 'list', 'h-5 w-5'), v === 'lista' ? 'Ver mapa' : 'Ver lista');
+  icons();
+  if (v === 'lista') { renderList(); $('#lista-title').focus(); } else map.invalidateSize();
+}
+
+function updateMineButton() {
+  const n = Object.keys(mine).length;
+  $('#mine-count').textContent = n ? `Minhas (${n})` : 'Minhas';
+  $('#btn-mine').setAttribute('aria-label', n ? `Minhas denúncias: ${n}` : 'Minhas denúncias');
+}
+
+// Avisa quando a situação de uma denúncia minha mudou desde a última visita.
+function checkMineUpdates() {
+  const changed = [];
+  for (const r of reports) {
+    if (mine[r.id] !== undefined && mine[r.id] !== r.status) { changed.push(r); mine[r.id] = r.status; }
+  }
+  saveMine();
+  if (changed.length) toast(`Novidade: sua denúncia de ${cat(changed[0].categoria).curto.toLowerCase()} agora está "${STATUS[changed[0].status]}".`);
+}
+
+function render() {
+  renderMap();
+  if (view === 'lista') renderList();
+}
 
 async function refresh() {
   reports = await api('/api/reports');
   render();
+  checkMineUpdates();
+  updateMineButton();
   const s = await api('/api/stats');
   const pct = s.alta_com_acao_pct;
   $('#stats-text').textContent = `${s.total} pontos no mapa · ${s.alta} de prioridade alta` + (pct === null ? '' : ` · ${pct}% dos urgentes já têm ação`);
@@ -122,6 +250,8 @@ function openSheet(id) {
     el('p', { class: 'hint flex items-start gap-1.5' }, ico('map-pin', 'mt-0.5 h-4 w-4 shrink-0'), `${place(r)} · ${ago(r.criado_em)} · ${STATUS[r.status]}`),
     el('div', { class: 'box' }, el('strong', {}, ico('brain-circuit', 'h-5 w-5'), 'Por que essa prioridade?'), r.motivo, status),
     el('div', { class: 'box' }, el('strong', {}, ico('life-buoy', 'h-5 w-5'), 'O que fazer agora'), r.orientacao),
+    officialBox(r),
+    whoBox(r),
     el('div', { class: 'mt-3 grid gap-2 sm:grid-cols-2' },
       el('button', { type: 'button', class: 'btn btn-primary', id: 'btn-confirm', onclick: () => confirmReport(r.id) }, ico('eye', 'h-5 w-5'), `Também vi isso aqui (${r.confirmacoes})`),
       el('button', { type: 'button', class: 'btn btn-secondary', onclick: () => speak(speech) }, ico('volume-2', 'h-5 w-5'), 'Ouvir'),
@@ -186,6 +316,11 @@ function setPin(lat, lng) {
     wiz.pin.on('dragend', () => { const p = wiz.pin.getLatLng(); setPin(p.lat, p.lng); });
   }
   $('#loc-status').textContent = '✔ Local marcado. Você pode arrastar o alfinete para ajustar.';
+  const risk = nearestRisk(lat, lng);
+  const box = $('#loc-risk');
+  box.hidden = !risk;
+  if (risk) box.replaceChildren(ico('triangle-alert', 'mt-0.5 h-5 w-5 shrink-0'), el('span', {}, el('strong', {}, 'Atenção: '), `este lugar fica a ${risk.d} m de uma ${risk.tipo.toLowerCase()} mapeada pela Defesa Civil (${risk.localidade}). Se houver perigo agora, saia do local e ligue 199.`));
+  icons();
 }
 
 function ensureMini() {
@@ -194,6 +329,8 @@ function ensureMini() {
     L.tileLayer(TILES, { maxZoom: 19, attribution: ATTR }).addTo(wiz.mini);
     wiz.mini.on('click', (e) => setPin(e.latlng.lat, e.latlng.lng));
   }
+  // O mapa do formulário segue a escolha feita no mapa principal.
+  if (map.hasLayer(riskLayer)) miniRiskLayer.addTo(wiz.mini); else miniRiskLayer.remove();
   setTimeout(() => wiz.mini.invalidateSize(), 50);
 }
 
@@ -272,6 +409,7 @@ async function next() {
     return submit(desc);
   }
   $('#wizard').close();
+  if (view === 'lista') setView('mapa');
   map.setView([wiz.lat, wiz.lng], 16);
 }
 
@@ -283,6 +421,9 @@ async function submit(desc) {
   try {
     const r = await api('/api/reports', { method: 'POST', body: JSON.stringify({ categoria: wiz.categoria, descricao: desc, lat: wiz.lat, lng: wiz.lng, foto: wiz.foto }) });
     reports = [r, ...reports];
+    mine[r.id] = r.status;
+    saveMine();
+    updateMineButton();
     render();
     refresh().catch(() => {});
     result.replaceChildren(
@@ -291,6 +432,9 @@ async function submit(desc) {
       r.foto_coerente ? '' : el('p', { class: 'notice' }, 'A foto parece não mostrar o problema descrito. A Defesa Civil vai conferir.'),
       el('div', { class: 'box' }, el('strong', {}, ico('brain-circuit', 'h-5 w-5'), 'Por que essa prioridade?'), r.motivo),
       el('div', { class: 'box' }, el('strong', {}, ico('life-buoy', 'h-5 w-5'), 'O que fazer agora'), r.orientacao),
+      officialBox(r),
+      whoBox(r),
+      el('p', { class: 'hint' }, 'Acompanhe em "Minhas": avisaremos aqui quando a prefeitura mudar a situação.'),
       el('button', { type: 'button', class: 'btn btn-secondary w-full', onclick: () => speak(`Denúncia enviada. Prioridade ${LEVEL[r.prioridade].rotulo}. ${r.motivo} ${r.orientacao}`) }, ico('volume-2', 'h-5 w-5'), 'Ouvir'),
     );
     wiz.lat = r.lat; wiz.lng = r.lng;
@@ -318,6 +462,8 @@ const closeSheetQuiet = () => { $('#sheet').hidden = true; };
 
 /* ---------- Eventos ---------- */
 $('#btn-new').addEventListener('click', openWizard);
+$('#btn-view').addEventListener('click', () => setView(view === 'lista' ? 'mapa' : 'lista'));
+$('#btn-mine').addEventListener('click', () => setView('lista', { onlyMine: !(view === 'lista' && mineOnly) }));
 $('#wiz-next').addEventListener('click', next);
 $('#wiz-back').addEventListener('click', () => goStep(wiz.step - 1));
 $('#wiz-close').addEventListener('click', () => $('#wizard').close());
@@ -362,9 +508,12 @@ $('#btn-font').addEventListener('click', (e) => {
     categories = await api('/api/categories');
     buildCategories();
     icons();
+    loadRiskAreas().catch(() => {});
     await refresh();
     if (!safe(() => localStorage.getItem('visto'))) { $('#help').showModal(); safe(() => localStorage.setItem('visto', '1')); }
   } catch (e) {
     $('#stats-text').textContent = 'Não consegui carregar o mapa. Verifique sua internet e recarregue a página.';
   }
 })();
+
+setInterval(() => { if (!document.hidden) refresh().catch(() => {}); }, 120_000);
