@@ -40,9 +40,6 @@ Meta: mais urgentes tratados, em menos tempo, antes da próxima chuva forte.
 - A IA não conhecia o território: classificava igual um bueiro no Centro e um bueiro dentro de uma área de risco nível 4 no Ibura. Passamos a enviar os **dados oficiais da Defesa Civil** no prompt e criamos um **piso de segurança** (nunca "baixa" em área de risco oficial).
 - _(preencher: outros casos observados no teste com o validador)_
 
-## O que mudou depois da conversa com o validador
-_(preencher após a Sessão Da Lama ao Caos e o teste do Dia 2: o que travou, o que simplificamos)_
-
 ## Dados do Recife (kit de dados abertos)
 | Base | Uso no app |
 |---|---|
