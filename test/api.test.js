@@ -126,3 +126,21 @@ test('API: recusa áudio em formato inválido', async () => {
   assert.equal(res.status, 400);
   close();
 });
+
+test('API: painel exclui qualquer denúncia (com PIN) e apaga a foto', async () => {
+  const { call, close } = await start();
+  const { id, foto_url } = await (await call('/api/reports', { method: 'POST', body: JSON.stringify(valid) })).json();
+
+  const semPin = await call(`/api/admin/reports/${id}`, { method: 'DELETE' });
+  assert.equal(semPin.status, 401);
+  assert.equal((await (await call('/api/reports')).json()).length, 1);
+
+  const res = await call(`/api/admin/reports/${id}`, { method: 'DELETE', headers: { 'x-admin-pin': '1234' } });
+  assert.equal(res.status, 200);
+  assert.equal((await (await call('/api/reports')).json()).length, 0);
+  assert.equal((await call(foto_url)).status, 404);
+
+  const deNovo = await call(`/api/admin/reports/${id}`, { method: 'DELETE', headers: { 'x-admin-pin': '1234' } });
+  assert.equal(deNovo.status, 404);
+  close();
+});

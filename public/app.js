@@ -203,6 +203,8 @@ function updateMineButton() {
 // Avisa quando a situação de uma denúncia minha mudou desde a última visita.
 function checkMineUpdates() {
   const changed = [];
+  // Denúncia minha que foi excluída pela Defesa Civil sai da lista "Minhas solicitações".
+  for (const id of Object.keys(mine)) if (!reports.some((r) => r.id === id)) delete mine[id];
   for (const r of reports) {
     if (mine[r.id] !== undefined && mine[r.id] !== r.status) { changed.push(r); mine[r.id] = r.status; }
   }

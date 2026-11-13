@@ -224,6 +224,14 @@ export function createApp({ store, analyze = analyzeWithGemini, geocode = revers
     res.json(adminReport(await store.update(r.id, patch)));
   });
 
+  // Exclusão definitiva de qualquer denúncia (só com o PIN do painel). Apaga também a foto.
+  app.delete('/api/admin/reports/:id', rateLimit({ windowMs: 60_000, max: 30 }), requirePin, async (req, res) => {
+    const ok = await store.remove(req.params.id);
+    if (!ok) return res.status(404).json({ erro: 'Denúncia não encontrada.' });
+    console.info(`Denúncia ${req.params.id} excluída pelo painel.`);
+    res.json({ ok: true, id: req.params.id });
+  });
+
   app.use('/vendor/leaflet', express.static(path.join(root, 'node_modules', 'leaflet', 'dist')));
   app.use('/vendor/lucide', express.static(path.join(root, 'node_modules', 'lucide', 'dist', 'umd')));
   app.use(express.static(path.join(root, 'public')));

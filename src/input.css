@@ -14,6 +14,7 @@
 @layer components {
   .btn { @apply inline-flex min-h-[56px] items-center justify-center gap-2 rounded-2xl px-5 text-base font-extrabold transition active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50; }
   .btn-primary { @apply bg-brand-600 text-white shadow-lg shadow-brand-600/30 hover:bg-brand-700; }
+  .btn-danger { @apply border-2 border-alta bg-white text-alta hover:bg-alta-bg; }
   .btn-secondary { @apply border-2 border-brand-600 bg-white text-brand-600 hover:bg-brand-50; }
   .icon-btn { @apply inline-flex h-11 min-w-[44px] items-center justify-center gap-1.5 rounded-xl border border-white/30 bg-white/10 px-3 text-sm font-bold text-white transition hover:bg-white/20; }
   .chip { @apply inline-flex min-h-[44px] flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-full px-1.5 text-[13px] sm:px-3 sm:text-sm font-bold text-slate-700 transition; }
@@ -102,7 +103,7 @@ html.hc .btn-primary *, html.hc .chip[aria-pressed="true"] *, html.hc .icon-btn[
 html.hc .cat[aria-checked="true"] * { color: #000 !important; background-color: transparent !important; }
 html.hc .cat[aria-checked="true"] { outline: 3px solid #fff; }
 /* Cores de prioridade em versão clara, legíveis sobre preto (sempre com símbolo + palavra) */
-html.hc .text-alta, html.hc .badge-alta, html.hc .error { color: #ff9e97 !important; border-color: #ff9e97 !important; }
+html.hc .text-alta, html.hc .badge-alta, html.hc .error, html.hc .btn-danger { color: #ff9e97 !important; border-color: #ff9e97 !important; }
 html.hc .text-media, html.hc .badge-media, html.hc .notice { color: #ffd54f !important; border-color: #ffd54f !important; }
 html.hc .text-baixa, html.hc .badge-baixa { color: #69f0ae !important; border-color: #69f0ae !important; }
 html.hc .text-atendido, html.hc .badge-atendido { color: #81d4fa !important; border-color: #81d4fa !important; }
