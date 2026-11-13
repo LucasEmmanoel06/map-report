@@ -1,4 +1,4 @@
-# 🌧️ Olho no Risco
+# 🌧️ De Olho no Risco
 
 > Hackathon APONTI Academy – Desafio **Antena na Lama** · Caminho **1. Prevenir e cuidar (antes da crise)**
 

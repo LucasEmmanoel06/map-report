@@ -99,7 +99,7 @@ export function referralTemplate(r) {
     `Para: ${c?.orgao || 'Defesa Civil do Recife'}`,
     `Assunto: ${c?.nome || 'Risco'} – ${local} – prioridade ${LV[r.prioridade]}`,
     '',
-    `Recebemos pelo Olho no Risco uma denúncia de morador sobre "${c?.nome || r.categoria}" em ${local} (coordenadas ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}), registrada em ${new Date(r.criado_em).toLocaleDateString('pt-BR')}.`,
+    `Recebemos pelo De Olho no Risco uma denúncia de morador sobre "${c?.nome || r.categoria}" em ${local} (coordenadas ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}), registrada em ${new Date(r.criado_em).toLocaleDateString('pt-BR')}.`,
     `Relato: "${r.descricao}"`,
     `Confirmações de outros moradores: ${r.confirmacoes?.length ?? r.confirmacoes ?? 0}.`,
     `Dados oficiais: ${describeContext(r.contexto_oficial)}`,

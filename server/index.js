@@ -218,7 +218,7 @@ async function main() {
     if (r.contexto_oficial === undefined) await store.update(r.id, { contexto_oficial: officialContext(r.lat, r.lng, r.bairro) });
   }
   const port = Number(process.env.PORT) || 3000;
-  createApp({ store }).listen(port, () => console.log(`Olho no Risco rodando em http://localhost:${port}`));
+  createApp({ store }).listen(port, () => console.log(`De Olho no Risco rodando em http://localhost:${port}`));
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

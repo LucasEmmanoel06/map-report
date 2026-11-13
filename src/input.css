@@ -39,6 +39,17 @@
   .risk-toggle[aria-pressed="false"] { @apply border-slate-400 text-slate-600 opacity-90; }
   .risk-dot { @apply inline-block h-3.5 w-3.5 rounded-full border-2 border-violet-700 bg-violet-400/50; }
   .kpi { @apply rounded-2xl bg-white p-3 shadow-sm; }
+  /* Menu do topo: lista suspensa no celular, botões lado a lado a partir de sm */
+  .header-menu { @apply absolute right-3 top-full z-10 -mt-1 hidden w-64 flex-col gap-1.5 rounded-2xl border border-white/20 bg-brand-900 p-2 shadow-2xl; }
+  .header-menu.open { @apply flex; }
+  .header-menu .icon-btn { @apply h-12 w-full justify-start gap-3 px-3 text-base; }
+  #font-ico { @apply inline-block w-5 text-center font-extrabold; }
+  @screen sm {
+    .header-menu { @apply static mt-0 flex w-auto flex-row border-0 bg-transparent p-0 shadow-none; }
+    .header-menu .icon-btn { @apply h-11 w-auto justify-center gap-1.5 text-sm; }
+    #font-ico { @apply w-auto; }
+    .menu-label { @apply sr-only; }
+  }
 }
 
 /* Alfinetes do mapa: ícone + letra + cor (nunca só cor) */
@@ -55,3 +66,45 @@
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } * { transition: none !important; } }
 
 [hidden] { display: none !important; }
+
+/* ---------- Alto contraste (botão no topo): fundo preto, texto branco, destaque amarelo ----------
+   :where() zera a especificidade da regra geral para que as exceções abaixo vençam.
+   O mapa (Leaflet) fica de fora: os alfinetes já têm borda forte, cor + símbolo + letra. */
+html.hc { color-scheme: dark; }
+html.hc :where(body, body *:not(.leaflet-container *):not(svg *)) {
+  background-color: #000 !important;
+  background-image: none !important;
+  color: #fff !important;
+  border-color: #fff !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+html.hc header { border-bottom: 2px solid #fff; }
+html.hc a:not(.leaflet-container *), html.hc a:not(.leaflet-container *) * { color: #ffeb3b !important; text-decoration: underline; }
+/* Controles do mapa (zoom, camada de risco, créditos) também em alto contraste */
+html.hc .leaflet-bar, html.hc .leaflet-bar a { background: #000 !important; color: #fff !important; border-color: #fff !important; }
+html.hc .leaflet-bar { border: 2px solid #fff !important; }
+html.hc .risk-toggle { background: #000 !important; color: #fff !important; border-color: #fff !important; opacity: 1 !important; box-shadow: none !important; }
+html.hc .risk-toggle[aria-pressed="true"] { background: #ffeb3b !important; color: #000 !important; border-color: #ffeb3b !important; }
+html.hc .risk-dot { border-color: currentColor !important; }
+html.hc .leaflet-control-attribution { background: #000 !important; color: #fff !important; }
+html.hc .leaflet-control-attribution a { color: #ffeb3b !important; }
+html.hc ::placeholder { color: #d4d4d4 !important; opacity: 1; }
+html.hc .btn, html.hc .chip, html.hc .icon-btn, html.hc input, html.hc textarea, html.hc select { border: 2px solid #fff !important; }
+html.hc .btn-primary,
+html.hc .chip[aria-pressed="true"],
+html.hc .icon-btn[aria-pressed="true"],
+html.hc .cat[aria-checked="true"],
+html.hc .cat[aria-checked="true"] .ico { background-color: #ffeb3b !important; color: #000 !important; border-color: #ffeb3b !important; }
+html.hc .btn-primary *, html.hc .chip[aria-pressed="true"] *, html.hc .icon-btn[aria-pressed="true"] *,
+html.hc .cat[aria-checked="true"] * { color: #000 !important; background-color: transparent !important; }
+html.hc .cat[aria-checked="true"] { outline: 3px solid #fff; }
+/* Cores de prioridade em versão clara, legíveis sobre preto (sempre com símbolo + palavra) */
+html.hc .text-alta, html.hc .badge-alta, html.hc .error { color: #ff9e97 !important; border-color: #ff9e97 !important; }
+html.hc .text-media, html.hc .badge-media, html.hc .notice { color: #ffd54f !important; border-color: #ffd54f !important; }
+html.hc .text-baixa, html.hc .badge-baixa { color: #69f0ae !important; border-color: #69f0ae !important; }
+html.hc .text-atendido, html.hc .badge-atendido { color: #81d4fa !important; border-color: #81d4fa !important; }
+html.hc .text-violet-800, html.hc .fake, html.hc .official { color: #d7b8ff !important; border-color: #d7b8ff !important; }
+html.hc :focus-visible { outline: 4px solid #ffeb3b !important; outline-offset: 3px; }
+/* Mapa-base em cinza para os alfinetes coloridos se destacarem */
+html.hc .leaflet-tile-pane { filter: grayscale(1) contrast(1.2); }
