@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { heuristicPriority, finalizePriority } from '../server/priority.js';
-import { parseAiResponse, analyzeWithGemini } from '../server/ai.js';
+import { parseAiResponse, analyzeWithGemini, transcribeAudio } from '../server/ai.js';
 
 test('regras: relato de perigo imediato com crianças vira prioridade alta', () => {
   const r = heuristicPriority({ category: 'encosta', description: 'Barreira desabando, há crianças morando embaixo' });
@@ -55,4 +55,23 @@ test('IA: modelo aposentado (404) cai automaticamente para o próximo modelo', a
 
 test('IA: sem chave configurada retorna null (usa regras)', async () => {
   assert.equal(await analyzeWithGemini({ category: 'bueiro', description: 'x' }, { apiKey: '' }), null);
+});
+
+test('IA: transcreve áudio enviando o formato certo ao Gemini', async () => {
+  let body;
+  const fetchImpl = async (_url, opts) => {
+    body = JSON.parse(opts.body);
+    const text = JSON.stringify({ tem_fala: true, texto: '  A barreira   está rachando  ' });
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }) };
+  };
+  const out = await transcribeAudio('data:audio/webm;codecs=opus;base64,AAAA', { fetchImpl, apiKey: 'x' });
+  assert.equal(out, 'A barreira está rachando');
+  assert.equal(body.contents[0].parts[1].inline_data.mime_type, 'audio/webm');
+  assert.equal(body.contents[0].parts[1].inline_data.data, 'AAAA');
+});
+
+test('IA: áudio sem fala devolve texto vazio; sem chave devolve null', async () => {
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: '{"tem_fala":false,"texto":"[ruído]"}' }] } }] }) });
+  assert.equal(await transcribeAudio('data:audio/mp4;base64,AAAA', { fetchImpl, apiKey: 'x' }), '');
+  assert.equal(await transcribeAudio('data:audio/mp4;base64,AAAA', { apiKey: '' }), null);
 });
