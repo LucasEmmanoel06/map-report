@@ -39,6 +39,20 @@ test('IA: lê resposta válida do Gemini e envia a foto', async () => {
   assert.equal(body.contents[0].parts[1].inline_data.mime_type, 'image/jpeg');
 });
 
+test('IA: modelo aposentado (404) cai automaticamente para o próximo modelo', async () => {
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(url);
+    if (urls.length === 1) return { ok: false, status: 404 };
+    const text = JSON.stringify({ foto_coerente: true, categoria_sugerida: 'muro', prioridade: 'alta', motivo: 'Muro cedendo.', orientacao: 'Afaste-se.' });
+    return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'pensando…', thought: true }, { text }] } }] }) };
+  };
+  const out = await analyzeWithGemini({ category: 'muro', description: 'muro cedendo' }, { fetchImpl, apiKey: 'x' });
+  assert.equal(out.prioridade, 'alta');
+  assert.equal(urls.length, 2);
+  assert.notEqual(urls[0], urls[1]);
+});
+
 test('IA: sem chave configurada retorna null (usa regras)', async () => {
   assert.equal(await analyzeWithGemini({ category: 'bueiro', description: 'x' }, { apiKey: '' }), null);
 });

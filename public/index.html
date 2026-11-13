@@ -20,6 +20,7 @@
         <span>Olho no Risco<small class="block text-xs font-medium text-brand-100">Prevenção a enchentes · Recife</small></span>
       </h1>
       <div class="flex gap-1.5">
+        <button type="button" id="btn-mine" class="icon-btn" aria-label="Minhas denúncias"><i data-lucide="user-round" class="h-5 w-5" aria-hidden="true"></i><span id="mine-count" class="hidden sm:inline">Minhas</span></button>
         <button type="button" id="btn-font" class="icon-btn text-base" aria-label="Aumentar o tamanho das letras">A+</button>
         <button type="button" id="btn-help" class="icon-btn" aria-label="Ajuda: como usar"><i data-lucide="circle-help" class="h-5 w-5" aria-hidden="true"></i></button>
       </div>
@@ -34,12 +35,24 @@
       <button type="button" class="chip" data-filter="baixa" aria-pressed="false"><span class="text-baixa" aria-hidden="true">●</span> Baixa</button>
       <button type="button" class="chip" data-filter="atendido" aria-pressed="false"><span class="text-atendido" aria-hidden="true">✔</span> Atendido</button>
     </div>
-    <p id="stats" class="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-600" aria-live="polite"><i data-lucide="activity" class="h-4 w-4 shrink-0 text-brand-600" aria-hidden="true"></i><span id="stats-text">Carregando o mapa…</span></p>
+    <div class="mt-1.5 flex items-center gap-2">
+      <p id="stats" class="flex flex-1 items-center gap-1.5 text-xs font-semibold text-slate-600" aria-live="polite"><i data-lucide="activity" class="h-4 w-4 shrink-0 text-brand-600" aria-hidden="true"></i><span id="stats-text">Carregando o mapa…</span></p>
+      <button type="button" id="btn-view" class="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-xl border-2 border-brand-600 bg-white px-3 text-sm font-extrabold text-brand-600 hover:bg-brand-50" aria-pressed="false"><i data-lucide="list" class="h-5 w-5" aria-hidden="true"></i> Ver lista</button>
+    </div>
   </div>
 
   <main class="relative min-h-0 flex-1">
-    <div id="mapa" class="absolute inset-0" aria-label="Mapa com os problemas denunciados"></div>
+    <div id="mapa" class="absolute inset-0 z-0" aria-label="Mapa com os problemas denunciados"></div>
+    <section id="lista" class="absolute inset-0 z-[500] overflow-auto bg-slate-50 px-3 pb-28 pt-3" aria-labelledby="lista-title" hidden>
+      <div class="mx-auto max-w-2xl">
+        <h2 id="lista-title" class="text-lg font-extrabold" tabindex="-1">Problemas denunciados</h2>
+        <p id="lista-hint" class="hint">Os mais urgentes aparecem primeiro.</p>
+        <ul id="lista-itens" class="mt-2 grid gap-2.5"></ul>
+      </div>
+    </section>
   </main>
+
+  <div id="toast" class="fixed inset-x-3 top-3 z-[4000] mx-auto max-w-md rounded-2xl border-2 border-brand-600 bg-white p-3 font-bold shadow-2xl" role="status" aria-live="polite" hidden></div>
 
   <button type="button" id="btn-new" class="btn btn-primary fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-[1000] -translate-x-1/2 whitespace-nowrap rounded-full border-4 border-white px-7 text-lg">
     <i data-lucide="plus-circle" class="h-6 w-6" aria-hidden="true"></i> Denunciar um problema
@@ -72,6 +85,7 @@
           <p class="hint">Ou toque no mapa / arraste o alfinete até o lugar certo.</p>
           <div id="mini-mapa" class="h-72 overflow-hidden rounded-2xl border-2 border-brand-900" aria-label="Mapa para marcar o local do problema"></div>
           <p id="loc-status" class="hint" aria-live="polite"></p>
+          <p id="loc-risk" class="notice flex gap-2" hidden></p>
         </section>
 
         <section data-step="3" hidden>
@@ -103,7 +117,8 @@
         <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">1</span><span><strong>Veja o mapa.</strong> Cada alfinete é um problema que pode causar alagamento ou deslizamento quando chover forte.</span></li>
         <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">2</span><span><strong>Viu algo perigoso?</strong> Toque em <em>Denunciar um problema</em>, escolha o tipo, marque o lugar e envie uma foto.</span></li>
         <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">3</span><span><strong>A inteligência artificial ajuda</strong> a decidir o que é mais urgente, e a Defesa Civil confere cada caso.</span></li>
-        <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">4</span><span><strong>Símbolos:</strong> <span class="font-bold text-alta">▲ vermelho = urgente</span> · <span class="font-bold text-media">◆ laranja = atenção</span> · <span class="font-bold text-baixa">● verde = prevenção</span> · <span class="font-bold text-atendido">✔ azul = já atendido pela prefeitura</span>.</span></li>
+        <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">4</span><span><strong>Símbolos:</strong> <span class="font-bold text-alta">▲ vermelho = urgente</span> · <span class="font-bold text-media">◆ laranja = atenção</span> · <span class="font-bold text-baixa">● verde = prevenção</span> · <span class="font-bold text-atendido">✔ azul = já atendido pela prefeitura</span> · <span class="font-bold text-violet-800">◯ roxo = área de risco oficial da Defesa Civil</span>.</span></li>
+        <li class="flex gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 font-extrabold text-white" aria-hidden="true">5</span><span><strong>Acompanhe.</strong> Em <em>Minhas</em> você vê se a prefeitura já está cuidando do que você mandou. Prefere sem mapa? Toque em <em>Ver lista</em>.</span></li>
       </ol>
       <p class="notice flex gap-2"><i data-lucide="siren" class="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true"></i><span><strong>Perigo agora?</strong> Saia do local e ligue <a class="font-extrabold underline" href="tel:199">199</a> (Defesa Civil) ou <a class="font-extrabold underline" href="tel:193">193</a> (Bombeiros). Este site não é um serviço de emergência.</span></p>
       <button type="button" class="btn btn-primary mt-2 w-full" id="help-close">Entendi</button>

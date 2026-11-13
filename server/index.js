@@ -3,11 +3,12 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CATEGORIES, CATEGORY_IDS } from './categories.js';
-import { analyzeWithGemini } from './ai.js';
+import { analyzeWithGemini, draftReferral } from './ai.js';
 import { heuristicPriority, finalizePriority, LEVELS } from './priority.js';
 import { reverseGeocode } from './geocode.js';
 import { createStore } from './store.js';
 import { seedReports } from './seed.js';
+import { officialContext, AREAS, SOURCES } from './recife-data.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const STATUSES = ['aberta', 'em_analise', 'resolvida'];
@@ -16,9 +17,38 @@ const BBOX = { minLat: -8.6, maxLat: -7.6, minLng: -35.3, maxLng: -34.7 };
 const MAX_PHOTO_CHARS = 1_800_000;
 
 const publicReport = (r) => {
-  const { confirmacoes, ...rest } = r;
-  return { ...rest, confirmacoes: confirmacoes.length, foto_url: r.tem_foto ? `/api/reports/${r.id}/photo` : null };
+  const { confirmacoes, encaminhamento, ...rest } = r;
+  return { ...rest, confirmacoes: confirmacoes.length, encaminhado_em: encaminhamento?.em || null, foto_url: r.tem_foto ? `/api/reports/${r.id}/photo` : null };
 };
+// Versão completa para o painel da Defesa Civil (inclui o texto do encaminhamento).
+const adminReport = (r) => ({ ...publicReport(r), encaminhamento: r.encaminhamento || null });
+
+const median = (xs) => {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+// Indicadores do pitch (calculados sobre todas as denúncias, incluindo exemplos fictícios marcados).
+export function computeStats(all) {
+  const high = all.filter((r) => r.prioridade === 'alta');
+  const acted = high.filter((r) => r.status !== 'aberta');
+  const waits = all.filter((r) => r.primeira_acao_em).map((r) => (new Date(r.primeira_acao_em) - new Date(r.criado_em)) / 3600_000);
+  const med = median(waits);
+  return {
+    total: all.length,
+    ficticios: all.filter((r) => r.ficticio).length,
+    abertas: all.filter((r) => r.status === 'aberta').length,
+    em_analise: all.filter((r) => r.status === 'em_analise').length,
+    resolvidas: all.filter((r) => r.status === 'resolvida').length,
+    alta: high.length,
+    alta_com_acao_pct: high.length ? Math.round((acted.length / high.length) * 100) : null,
+    horas_ate_primeira_acao: med === null ? null : Math.round(med * 10) / 10,
+    aguardando_revisao: all.filter((r) => !r.revisada_por_humano).length,
+    em_area_de_risco_oficial: all.filter((r) => r.contexto_oficial?.area).length,
+  };
+}
 
 // Limitador simples por IP, para proteger a cota gratuita da IA contra abuso.
 function rateLimit({ windowMs, max }) {
@@ -26,6 +56,7 @@ function rateLimit({ windowMs, max }) {
   return (req, res, next) => {
     const key = req.ip;
     const now = Date.now();
+    if (hits.size > 5000) for (const [k, v] of hits) if (!v.some((t) => now - t < windowMs)) hits.delete(k);
     const entry = (hits.get(key) || []).filter((t) => now - t < windowMs);
     if (entry.length >= max) return res.status(429).json({ erro: 'Muitas tentativas. Espere um pouco e tente de novo.' });
     entry.push(now);
@@ -34,13 +65,19 @@ function rateLimit({ windowMs, max }) {
   };
 }
 
-export function createApp({ store, analyze = analyzeWithGemini, geocode = reverseGeocode, adminPin = process.env.ADMIN_PIN || 'defesacivil' }) {
+export function createApp({ store, analyze = analyzeWithGemini, geocode = reverseGeocode, referral = draftReferral, adminPin = process.env.ADMIN_PIN || 'defesacivil' }) {
   const app = express();
   app.set('trust proxy', 1);
   app.use(express.json({ limit: '2.5mb' }));
 
-  app.get('/api/health', (_req, res) => res.json({ ok: true }));
+  app.get('/api/health', (_req, res) => res.json({ ok: true, ia: Boolean(process.env.GEMINI_API_KEY) }));
   app.get('/api/categories', (_req, res) => res.json(CATEGORIES));
+  // Dados abertos oficiais usados pelo app (Defesa Civil do Recife).
+  app.get('/api/sources', (_req, res) => res.json(SOURCES));
+  app.get('/api/risk-areas', (_req, res) => {
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.json({ fonte: AREAS.fonte, url: AREAS.url, pontos: AREAS.pontos.map((p) => [p.lat, p.lng, p.nivel, p.localidade, p.tipo]) });
+  });
 
   app.get('/api/reports', async (_req, res) => {
     const all = await store.list();
@@ -67,15 +104,17 @@ export function createApp({ store, analyze = analyzeWithGemini, geocode = revers
       return res.status(400).json({ erro: 'Marque o local no mapa, dentro da Região Metropolitana do Recife.' });
     }
 
-    const heur = heuristicPriority({ category: categoria, description: desc });
+    // 1) endereço (OpenStreetMap) → 2) dados oficiais da Defesa Civil → 3) regras de segurança → 4) IA com todo o contexto
+    const place = await geocode(la, ln);
+    const contexto = officialContext(la, ln, place.bairro, place.alternativas);
+    const heur = heuristicPriority({ category: categoria, description: desc, context: contexto });
     let ai = null;
     try {
-      ai = await analyze({ category: categoria, description: desc, photo: foto });
+      ai = await analyze({ category: categoria, description: desc, photo: foto, context: contexto });
     } catch (err) {
       console.warn('IA indisponível, usando regras:', err.message);
     }
     const final = finalizePriority(ai, heur);
-    const place = await geocode(la, ln);
 
     const report = {
       id: crypto.randomUUID(),
@@ -83,7 +122,7 @@ export function createApp({ store, analyze = analyzeWithGemini, geocode = revers
       descricao: desc,
       lat: la,
       lng: ln,
-      bairro: place.bairro || null,
+      bairro: place.bairro || contexto.area?.bairro || null,
       rua: place.rua || null,
       prioridade: final.prioridade,
       prioridade_ia: final.prioridade,
@@ -91,6 +130,8 @@ export function createApp({ store, analyze = analyzeWithGemini, geocode = revers
       motivo: final.motivo,
       orientacao: ai?.orientacao || 'Mantenha distância do local. Em caso de perigo imediato, ligue 199 (Defesa Civil).',
       fonte_prioridade: final.fonte,
+      contexto_oficial: contexto,
+      categoria_sugerida_ia: ai?.categoria_sugerida && ai.categoria_sugerida !== categoria ? ai.categoria_sugerida : null,
       foto_coerente: ai ? ai.foto_coerente : true,
       tem_foto: true,
       ficticio: false,
@@ -118,22 +159,7 @@ export function createApp({ store, analyze = analyzeWithGemini, geocode = revers
   });
 
   // Indicador do pitch: % das denúncias de prioridade ALTA que já receberam ação, e tempo mediano até a 1ª ação.
-  app.get('/api/stats', async (_req, res) => {
-    const all = await store.list();
-    const high = all.filter((r) => r.prioridade === 'alta');
-    const acted = high.filter((r) => r.status !== 'aberta');
-    const waits = all.filter((r) => r.primeira_acao_em).map((r) => (new Date(r.primeira_acao_em) - new Date(r.criado_em)) / 3600_000).sort((a, b) => a - b);
-    const median = waits.length ? waits[Math.floor(waits.length / 2)] : null;
-    res.json({
-      total: all.length,
-      abertas: all.filter((r) => r.status === 'aberta').length,
-      em_analise: all.filter((r) => r.status === 'em_analise').length,
-      resolvidas: all.filter((r) => r.status === 'resolvida').length,
-      alta: high.length,
-      alta_com_acao_pct: high.length ? Math.round((acted.length / high.length) * 100) : null,
-      horas_ate_primeira_acao: median === null ? null : Math.round(median * 10) / 10,
-    });
-  });
+  app.get('/api/stats', async (_req, res) => res.json(computeStats(await store.list())));
 
   // Auditoria humana: Defesa Civil confirma/corrige a prioridade da IA e muda o status.
   const requirePin = (req, res, next) => {
@@ -143,6 +169,17 @@ export function createApp({ store, analyze = analyzeWithGemini, geocode = revers
     next();
   };
   app.post('/api/admin/check', rateLimit({ windowMs: 60_000, max: 10 }), requirePin, (_req, res) => res.json({ ok: true }));
+  app.get('/api/admin/reports', rateLimit({ windowMs: 60_000, max: 60 }), requirePin, async (_req, res) => {
+    res.json((await store.list()).map(adminReport));
+  });
+  // IA redige o encaminhamento ao órgão responsável; a Defesa Civil revisa e copia antes de enviar.
+  app.post('/api/admin/reports/:id/encaminhamento', rateLimit({ windowMs: 60_000, max: 10 }), requirePin, async (req, res) => {
+    const r = await store.get(req.params.id);
+    if (!r) return res.status(404).json({ erro: 'Denúncia não encontrada.' });
+    const draft = await referral(r);
+    const encaminhamento = { ...draft, em: new Date().toISOString() };
+    res.json(adminReport(await store.update(r.id, { encaminhamento })));
+  });
   app.patch('/api/admin/reports/:id', rateLimit({ windowMs: 60_000, max: 60 }), requirePin, async (req, res) => {
     const { prioridade, status } = req.body || {};
     const r = await store.get(req.params.id);
@@ -160,7 +197,7 @@ export function createApp({ store, analyze = analyzeWithGemini, geocode = revers
       if (status !== 'aberta' && !r.primeira_acao_em) patch.primeira_acao_em = now;
       patch.resolvido_em = status === 'resolvida' ? now : null;
     }
-    res.json(publicReport(await store.update(r.id, patch)));
+    res.json(adminReport(await store.update(r.id, patch)));
   });
 
   app.use('/vendor/leaflet', express.static(path.join(root, 'node_modules', 'leaflet', 'dist')));
@@ -170,9 +207,15 @@ export function createApp({ store, analyze = analyzeWithGemini, geocode = revers
 }
 
 async function main() {
+  // Carrega o .env local (Node 20.12+). Em produção as variáveis vêm do Render.
+  try { process.loadEnvFile?.(path.join(root, '.env')); } catch { /* sem .env: segue com o ambiente */ }
   const store = await createStore();
   if (process.env.SEED !== 'false' && (await store.count()) === 0) {
     for (const r of seedReports()) await store.create(r, null);
+  }
+  // Bases antigas: completa o contexto oficial das denúncias que ainda não o têm.
+  for (const r of await store.list()) {
+    if (r.contexto_oficial === undefined) await store.update(r.id, { contexto_oficial: officialContext(r.lat, r.lng, r.bairro) });
   }
   const port = Number(process.env.PORT) || 3000;
   createApp({ store }).listen(port, () => console.log(`Olho no Risco rodando em http://localhost:${port}`));
