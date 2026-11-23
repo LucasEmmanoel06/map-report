@@ -4,8 +4,6 @@
 
 **Ideia em uma frase:** qualquer morador do Recife denuncia no mapa, com foto, um problema que agrava alagamentos e deslizamentos (encosta rachada, lixo no canal, bueiro entupido…); uma IA cruza a foto e o relato com os **dados oficiais da Defesa Civil**, sugere a prioridade, a Defesa Civil confere e encaminha ao órgão certo **antes** da chuva.
 
-🔗 **Deploy público:** _preencher o link (Render)_ · **Painel da Defesa Civil:** `/painel.html` · **Roteiro do pitch:** [docs/PITCH.md](docs/PITCH.md)
-
 ## Problema
 Rios, canais e encostas da RMR ficam entupidos ou instáveis, e a prefeitura só descobre depois da tragédia (maio/2022: +120 mortes em PE). A informação sobre quais pontos são mais urgentes não chega a quem pode agir — e quem denuncia nunca sabe se alguém viu.
 
@@ -71,14 +69,8 @@ Variáveis: `GEMINI_API_KEY`, `GEMINI_MODEL` (padrão `gemini-3.5-flash-lite`), 
 ## API
 `GET /api/reports` · `POST /api/reports` · `POST /api/reports/:id/confirm` · `GET /api/stats` · `GET /api/risk-areas` · `GET /api/sources` · `GET /api/health` · Admin (cabeçalho `x-admin-pin`): `GET /api/admin/reports` · `PATCH /api/admin/reports/:id` · `POST /api/admin/reports/:id/encaminhamento`.
 
-## Deploy (Render)
-Crie um *Web Service* a partir deste repositório (o `render.yaml` já configura, incluindo `npm run build` do Tailwind). Defina `GEMINI_API_KEY` e, para persistir os dados, `DATABASE_URL` de um PostgreSQL gratuito (Neon/Supabase/Render). O `ADMIN_PIN` é gerado pelo Render (veja em *Environment*).
-
 ## Testes (CI)
 21 testes com `node:test` em `test/`: regras de prioridade, dados oficiais (área de risco, histórico do bairro, piso de segurança), IA simulada (validação, fallback de modelo, prompt injection), encaminhamento, indicadores (% de urgentes com ação, mediana), validações da API e auditoria humana com PIN. Executados no GitHub Actions (`.github/workflows/ci.yml`).
 
 ## Stack
 Node.js 20+ · Express · Tailwind CSS 3 · Lucide · Leaflet + OpenStreetMap · JS puro no front · PostgreSQL (opcional) · Gemini Flash-Lite · Dados Abertos do Recife.
-
-## Limitações conhecidas (MVP)
-Sem login de cidadão ("Minhas" e confirmações ficam no aparelho); PIN único para o painel; avisos de mudança aparecem quando o morador abre o app (não há push/WhatsApp ainda); áreas de risco oficiais só da Regional Sul; fotos guardadas no banco já comprimidas (≤1024px).
